@@ -51,6 +51,12 @@ const Forecast: NextPage = () => {
   })
   // Geolocation deferred to v2
   // const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null)
+  
+  // AI Forecast state
+  const [aiSummary, setAiSummary] = useState<string | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [rawForecastData, setRawForecastData] = useState<any>(null)
 
   // Mock data for charts - replace with real API data later
   const generateMockWaveData = () => {
@@ -108,6 +114,9 @@ const Forecast: NextPage = () => {
       const result = await api.fetchGlobalForecast(targetLat, targetLon, 24)
       
       if (result && result.summary) {
+        // Store raw forecast data for AI interpretation
+        setRawForecastData(result)
+        
         // Map ForecastData to SurfCondition for display
         const mappedData: SurfCondition = {
           id: Date.now(),
@@ -126,6 +135,9 @@ const Forecast: NextPage = () => {
         if (!loading) {
           toast.success('Forecast updated successfully')
         }
+        
+        // Fetch AI interpretation after successful forecast load
+        await fetchAIInterpretation(result)
       }
     } catch (err) {
       console.error('Error fetching forecast:', err)
@@ -135,6 +147,45 @@ const Forecast: NextPage = () => {
     } finally {
       setLoading(false)
       setRefreshing(false)
+    }
+  }
+
+  const fetchAIInterpretation = async (forecastData: any) => {
+    try {
+      setAiLoading(true)
+      setAiError(null)
+      
+      // Check localStorage cache first (avoid redundant API calls)
+      const cacheKey = `ai-forecast-${forecastData.location.lat}-${forecastData.location.lon}-${new Date(forecastData.timestamp).toDateString()}`
+      const cached = localStorage.getItem(cacheKey)
+      
+      if (cached) {
+        const cachedData = JSON.parse(cached)
+        // Cache valid for 6 hours
+        if (Date.now() - cachedData.timestamp < 6 * 60 * 60 * 1000) {
+          setAiSummary(cachedData.summary)
+          setAiLoading(false)
+          return
+        }
+      }
+      
+      // Fetch fresh AI interpretation
+      const interpretation = await api.interpretForecast(forecastData)
+      
+      if (interpretation && interpretation.summary) {
+        setAiSummary(interpretation.summary)
+        
+        // Cache the result
+        localStorage.setItem(cacheKey, JSON.stringify({
+          summary: interpretation.summary,
+          timestamp: Date.now()
+        }))
+      }
+    } catch (err) {
+      console.error('Error fetching AI interpretation:', err)
+      setAiError('AI forecast unavailable — try again later.')
+    } finally {
+      setAiLoading(false)
     }
   }
 
@@ -359,6 +410,63 @@ const Forecast: NextPage = () => {
                   data={generateMockTideData()}
                   loading={loading}
                 />
+              </div>
+            </div>
+
+            {/* AI-Powered Forecast Summary */}
+            <div className="mb-12">
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200 p-8">
+                <div className="flex items-center space-x-3 mb-6">
+                  <div className="p-2 bg-gradient-ocean rounded-lg">
+                    <span className="text-2xl">🧠</span>
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">SwellSense AI Forecast</h2>
+                    <p className="text-sm text-gray-600">48-hour AI-powered surf outlook</p>
+                  </div>
+                </div>
+
+                {aiLoading ? (
+                  <div className="space-y-4">
+                    <div className="animate-pulse">
+                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-3"></div>
+                      <div className="h-4 bg-gray-200 rounded w-full mb-3"></div>
+                      <div className="h-4 bg-gray-200 rounded w-5/6 mb-3"></div>
+                      <div className="h-4 bg-gray-200 rounded w-4/5 mb-3"></div>
+                      <div className="h-4 bg-gray-200 rounded w-full mb-3"></div>
+                      <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+                    </div>
+                    <p className="text-sm text-gray-500 italic text-center mt-6">
+                      Generating AI forecast summary...
+                    </p>
+                  </div>
+                ) : aiError ? (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-6 text-center">
+                    <p className="text-amber-800 font-medium">⚠️ {aiError}</p>
+                    <button
+                      onClick={() => rawForecastData && fetchAIInterpretation(rawForecastData)}
+                      className="mt-4 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium"
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                ) : aiSummary ? (
+                  <div className="prose prose-lg max-w-none">
+                    <div className="text-gray-800 leading-relaxed whitespace-pre-line">
+                      {aiSummary}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-500 py-8">
+                    <p className="italic">AI forecast will appear after data loads...</p>
+                  </div>
+                )}
+
+                <div className="mt-6 pt-6 border-t border-gray-200">
+                  <p className="text-xs text-gray-500 text-center">
+                    🤖 Powered by OpenAI GPT-4 • Analysis based on real-time NOAA and global forecast data
+                  </p>
+                </div>
               </div>
             </div>
 

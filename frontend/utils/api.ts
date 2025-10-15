@@ -171,6 +171,25 @@ class APIClient {
     
     return response.json()
   }
+
+  /**
+   * Get AI interpretation of forecast data
+   */
+  async interpretForecast(forecastData: ForecastData): Promise<{summary: string; timestamp: string}> {
+    const response = await fetch(`${this.baseURL}/api/ai/forecast/interpret`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(forecastData),
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Forecast interpretation failed: ${response.statusText}`)
+    }
+    
+    return response.json()
+  }
 }
 
 // Export singleton instance
