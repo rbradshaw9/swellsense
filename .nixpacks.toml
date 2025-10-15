@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["python39", "python39Packages.pip"]
+
+[phases.install]
+cmds = ["echo 'Skipping default pip install'"]
+
+[phases.build]
+cmds = ["echo 'Custom build handled in start.sh'"]
+
+[phases.start]
+cmds = ["./start.sh"]
