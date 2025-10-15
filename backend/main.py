@@ -4,8 +4,8 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import uvicorn
 
-from .database import init_db
-from .routers import forecast
+from database import init_db
+from routers import forecast
 
 
 @asynccontextmanager

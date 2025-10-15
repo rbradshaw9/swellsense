@@ -8,7 +8,11 @@ from sqlalchemy import select, desc
 from typing import List
 from datetime import datetime, timedelta
 
-from ..database import get_db, SurfCondition
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
+
+from database import get_db, SurfCondition
 
 router = APIRouter(prefix="/api", tags=["forecast"])
 

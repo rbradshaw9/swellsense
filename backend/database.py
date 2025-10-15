@@ -10,7 +10,14 @@ import os
 from typing import AsyncGenerator
 
 # Database URL from environment
-DATABASE_URL = os.getenv("DATABASE_URL", "").replace("postgresql://", "postgresql+asyncpg://")
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+# Convert postgresql:// to postgresql+asyncpg:// and remove incompatible params
+if DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+    # Remove sslmode and channel_binding params that asyncpg doesn't support in URL
+    # asyncpg handles SSL automatically with Neon
+    DATABASE_URL = DATABASE_URL.split("?")[0] + "?ssl=require" if "?" in DATABASE_URL else DATABASE_URL
 
 # Create async engine
 engine = create_async_engine(
