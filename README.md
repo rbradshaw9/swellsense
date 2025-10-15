@@ -237,7 +237,10 @@ Railway provides:
 2. **Create New Project**
    - Click "New Project" → "Deploy from GitHub repo"
    - Select `rbradshaw9/swellsense`
-   - Railway will detect the `railway.json` configuration
+   - Railway will detect the configuration files:
+     - `start.sh` - Startup script
+     - `railway.json` - Build configuration
+     - `Procfile` - Process definition (fallback)
 
 3. **Configure Environment Variables**
    
@@ -247,23 +250,37 @@ Railway provides:
    DATABASE_URL=postgresql://neondb_owner:npg_yLWglz7t0SiK@ep-floral-base-adkze7qi-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
    OPENAI_API_KEY=sk-proj-your-key-here
    SECRET_KEY=ZtUp_q7nOio0sVnd3Hsau_zhuHiHnwWITIEJM9ci5qawq5x1ivByWfOWHNnDcngT1_w5r2Augu9YdpxTybXpNg
+   PORT=8000
    ```
+   
+   **Note**: Railway automatically injects the `PORT` variable, but you can set it explicitly if needed.
 
 4. **Deploy**
-   - Railway will automatically build and deploy
+   - Railway will automatically:
+     1. Run `pip install -r backend/requirements.txt`
+     2. Execute `./start.sh` to start uvicorn
    - Your API will be live at: `https://swellsense-production.up.railway.app`
 
 #### 2. Verify Deployment
 
-Check Railway logs for successful startup:
+Check Railway logs (Deployments → View Logs) for successful startup:
 ```
 INFO:     Started server process [123]
 INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:$PORT
+INFO:     Uvicorn running on http://0.0.0.0:<port>
 ```
+
+**Troubleshooting**: If you see "Script start.sh not found" error:
+- Ensure `start.sh` is executable: `chmod +x start.sh`
+- Verify `start.sh` is committed to git
+- Check Railway logs for detailed error messages
 
 Test the live API:
 ```bash
+# Health check
+curl https://swellsense-production.up.railway.app/
+
+# AI query with location
 curl -X POST https://swellsense-production.up.railway.app/api/ai/query \
   -H "Content-Type: application/json" \
   -d '{"query": "Should I surf today?", "location": "western PR"}'
@@ -282,13 +299,30 @@ Expected response:
 
 #### 3. Redeploy
 
+**Automatic Deployment:**
 Railway auto-deploys on every push to `main`:
 ```bash
+git add .
+git commit -m "Update backend"
 git push origin main
 ```
 
-Or manually redeploy from Railway dashboard:
-- Go to Deployments → Click "Deploy"
+**Manual Deployment:**
+- Via Railway Dashboard: Deployments → Click "Deploy"
+- Via Railway CLI:
+  ```bash
+  npm install -g @railway/cli
+  railway login
+  railway up
+  ```
+
+**View Logs:**
+```bash
+# Via CLI
+railway logs
+
+# Or in Railway dashboard: Deployments → View Logs
+```
 
 #### 4. Custom Domain (Optional)
 
@@ -296,10 +330,11 @@ Or manually redeploy from Railway dashboard:
 2. Add custom domain: `api.swellsense.app`
 3. Update DNS records as instructed
 
-#### Configuration Files
+#### Deployment Files
 
-- **`railway.json`**: Railway-specific build and deploy settings
-- **`Procfile`**: Fallback process definition
+- **`start.sh`**: Executable startup script for Railway
+- **`railway.json`**: Build and deploy configuration
+- **`Procfile`**: Process definition (fallback)
 - **`backend/requirements.txt`**: Python dependencies
 - **`backend/main.py`**: FastAPI application entry point
 
