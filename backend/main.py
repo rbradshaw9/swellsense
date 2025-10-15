@@ -1,7 +1,22 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
 import uvicorn
+
+from .database import init_db
+from .routers import forecast
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan event handler for startup and shutdown"""
+    # Startup: Initialize database
+    await init_db()
+    yield
+    # Shutdown: Clean up resources
+    pass
+
 
 # Create FastAPI instance
 app = FastAPI(
@@ -9,8 +24,12 @@ app = FastAPI(
     description="AI-powered surf forecasting API that analyzes buoy, wind, and tide data",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
+
+# Include routers
+app.include_router(forecast.router)
 
 # Configure CORS
 origins = [

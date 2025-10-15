@@ -197,6 +197,53 @@ Once the backend is running, access the interactive API documentation at:
 - **Swagger UI**: `http://localhost:8000/docs`
 - **ReDoc**: `http://localhost:8000/redoc`
 
+### Available Endpoints
+
+#### Forecast Endpoints
+
+**GET /api/forecast**
+- Get recent surf conditions from the database
+- Query parameters:
+  - `limit` (int, default: 24): Number of records to return
+  - `buoy_id` (str, optional): Filter by specific buoy station
+- Returns: List of surf condition records with timestamps, wave height, period, wind speed
+
+**GET /api/forecast/latest**
+- Get the most recent surf condition reading
+- Query parameters:
+  - `buoy_id` (str, optional): Filter by specific buoy station
+- Returns: Single most recent surf condition record
+
+**GET /api/forecast/stats**
+- Get statistical summary of surf conditions over a time period
+- Query parameters:
+  - `hours` (int, default: 24): Number of hours to analyze
+  - `buoy_id` (str, optional): Filter by specific buoy station
+- Returns: Statistics including average, min, max wave height and wind speed
+
+### NOAA Data Ingestion
+
+The project includes a background script to fetch and ingest real-time buoy data from NOAA:
+
+```bash
+# Run manually
+cd backend
+python scripts/ingest_noaa.py --buoy-id 41043
+
+# Schedule with cron (every 3 hours)
+0 */3 * * * cd /path/to/swellsense/backend && python scripts/ingest_noaa.py --buoy-id 41043
+```
+
+**Environment Variables:**
+- `NOAA_BUOY_ID`: Default buoy station (e.g., 41043 for East of St. Augustine, FL)
+- Find your buoy at: https://www.ndbc.noaa.gov/
+
+**How it works:**
+1. Fetches real-time data from NOAA NDBC in text format
+2. Parses wave height, wave period, wind speed measurements
+3. Inserts new records into the surf_conditions table
+4. Automatically skips duplicates to avoid redundant data
+
 ## Testing
 
 ### Backend Tests

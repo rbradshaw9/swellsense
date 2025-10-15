@@ -1,11 +1,51 @@
 import type { NextPage } from 'next'
 import Head from 'next/head'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronRightIcon, WavesIcon } from 'lucide-react'
+import ForecastCard from '../components/ForecastCard'
+import AIChat from '../components/AIChat'
+
+interface SurfCondition {
+  id: number;
+  timestamp: string;
+  wave_height: number | null;
+  wave_period: number | null;
+  wind_speed: number | null;
+  tide_level: number | null;
+  buoy_id: string | null;
+}
 
 const Home: NextPage = () => {
   const [email, setEmail] = useState('')
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [forecastData, setForecastData] = useState<SurfCondition | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  // Fetch forecast data on mount
+  useEffect(() => {
+    const fetchForecast = async () => {
+      try {
+        // Use environment variable for API URL, fallback to localhost
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        const response = await fetch(`${apiUrl}/api/forecast/latest`)
+        const result = await response.json()
+        
+        if (result.status === 'success' && result.data) {
+          setForecastData(result.data)
+        }
+      } catch (error) {
+        console.error('Error fetching forecast:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchForecast()
+    
+    // Refresh every 5 minutes
+    const interval = setInterval(fetchForecast, 5 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [])
 
   const handleEmailSignup = (e: React.FormEvent) => {
     e.preventDefault()
@@ -133,10 +173,21 @@ const Home: NextPage = () => {
               </div>
             </div>
           </div>
+
+          {/* Forecast and AI Section */}
+          <div className="mx-auto max-w-6xl mt-20 px-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Live Forecast Card */}
+              <ForecastCard data={forecastData} loading={loading} />
+              
+              {/* AI Chat Placeholder */}
+              <AIChat />
+            </div>
+          </div>
         </main>
 
         {/* Footer */}
-        <footer className="border-t border-gray-200 bg-white">
+        <footer className="border-t border-gray-200 bg-white mt-20">
           <div className="mx-auto max-w-7xl px-6 py-8">
             <div className="flex flex-col md:flex-row items-center justify-between">
               <div className="flex items-center space-x-2">
