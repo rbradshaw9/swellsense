@@ -1,9 +1,12 @@
 import type { NextPage } from 'next'
 import Head from 'next/head'
 import { useState, useEffect } from 'react'
-import { WavesIcon, RefreshCw, Calendar } from 'lucide-react'
-import ForecastCard from '../components/ui/ForecastCard'
+import { WavesIcon, RefreshCw, Calendar, AlertTriangle } from 'lucide-react'
 import { api } from '../utils/api'
+import WaveHeightChart from '../components/charts/WaveHeightChart'
+import TideChart from '../components/charts/TideChart'
+import WindCompass from '../components/charts/WindCompass'
+import DataCard from '../components/charts/DataCard'
 
 interface SurfCondition {
   id: number;
@@ -20,18 +23,64 @@ const Forecast: NextPage = () => {
   const [loading, setLoading] = useState(true)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Mock data for charts - replace with real API data later
+  const generateMockWaveData = () => {
+    const now = new Date()
+    return Array.from({ length: 24 }, (_, i) => {
+      const timestamp = new Date(now.getTime() + i * 60 * 60 * 1000)
+      return {
+        timestamp: timestamp.toISOString(),
+        waveHeight: 2 + Math.sin(i / 3) * 1.5 + Math.random() * 0.5,
+        wavePeriod: 8 + Math.sin(i / 4) * 2 + Math.random() * 1,
+      }
+    })
+  }
+
+  const generateMockTideData = () => {
+    const now = new Date()
+    const data: Array<{ timestamp: string; height: number; type?: 'high' | 'low' }> = Array.from({ length: 48 }, (_, i) => {
+      const timestamp = new Date(now.getTime() + i * 30 * 60 * 1000) // 30-min intervals
+      const hour = i * 0.5
+      const height = 3 * Math.sin((hour / 6) * Math.PI) // Two tide cycles per day
+      return {
+        timestamp: timestamp.toISOString(),
+        height: height,
+      }
+    })
+    
+    // Mark high and low tides
+    data.forEach((point, i) => {
+      if (i > 0 && i < data.length - 1) {
+        const prev = data[i - 1].height
+        const curr = point.height
+        const next = data[i + 1].height
+        
+        if (curr > prev && curr > next && curr > 2) {
+          point.type = 'high'
+        } else if (curr < prev && curr < next && curr < -2) {
+          point.type = 'low'
+        }
+      }
+    })
+    
+    return data
+  }
 
   const fetchForecast = async () => {
     try {
       setRefreshing(true)
+      setError(null)
       const result = await api.fetchLatestForecast()
       
       if (result.status === 'success' && result.data) {
         setForecastData(result.data)
         setLastUpdate(new Date())
       }
-    } catch (error) {
-      console.error('Error fetching forecast:', error)
+    } catch (err) {
+      console.error('Error fetching forecast:', err)
+      setError(err instanceof Error ? err.message : 'Failed to fetch forecast data')
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -49,6 +98,21 @@ const Forecast: NextPage = () => {
 
   const handleRefresh = () => {
     fetchForecast()
+  }
+
+  // Convert m/s to mph for display
+  const waveHeightFt = forecastData?.wave_height ? (forecastData.wave_height * 3.281).toFixed(1) : '--'
+  const windSpeedMph = forecastData?.wind_speed ? (forecastData.wind_speed * 2.237).toFixed(1) : '--'
+  const tideLevelFt = forecastData?.tide_level ? (forecastData.tide_level * 3.281).toFixed(1) : '--'
+
+  // Determine wave quality based on height
+  const getWaveQuality = (heightM: number | null) => {
+    if (!heightM) return undefined
+    const heightFt = heightM * 3.281
+    if (heightFt >= 4 && heightFt <= 8) return 'excellent'
+    if (heightFt >= 2 && heightFt < 4) return 'good'
+    if (heightFt >= 1 && heightFt < 2) return 'fair'
+    return 'poor'
   }
 
   return (
@@ -96,25 +160,85 @@ const Forecast: NextPage = () => {
                 })}
               </div>
             )}
+
+            {/* Error Alert */}
+            {error && (
+              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3">
+                <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="text-sm font-semibold text-red-900">Failed to load forecast</h3>
+                  <p className="text-sm text-red-700 mt-1">{error}</p>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Current Conditions */}
+          {/* Current Conditions Data Cards */}
           <div className="mb-12">
             <h2 className="text-2xl font-semibold text-gray-900 mb-6">Current Conditions</h2>
-            <ForecastCard data={forecastData} loading={loading} />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <DataCard
+                icon="wave"
+                title="Wave Height"
+                value={waveHeightFt}
+                unit="ft"
+                subtitle={forecastData?.wave_period ? `${forecastData.wave_period.toFixed(1)}s period` : undefined}
+                quality={getWaveQuality(forecastData?.wave_height || null)}
+                loading={loading}
+              />
+              <DataCard
+                icon="wind"
+                title="Wind Speed"
+                value={windSpeedMph}
+                unit="mph"
+                subtitle={forecastData?.wind_speed ? `${(forecastData.wind_speed * 1.944).toFixed(1)} kts` : undefined}
+                loading={loading}
+              />
+              <DataCard
+                icon="temp"
+                title="Water Temp"
+                value="68"
+                unit="°F"
+                subtitle="Comfortable"
+                loading={loading}
+              />
+              <DataCard
+                icon="tide"
+                title="Tide Height"
+                value={tideLevelFt}
+                unit="ft"
+                subtitle="Rising"
+                trend="up"
+                loading={loading}
+              />
+            </div>
           </div>
 
-          {/* 24-Hour Overview (Coming Soon) */}
+          {/* Wind Compass */}
           <div className="mb-12">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">24-Hour Overview</h2>
-            <div className="bg-white rounded-xl p-12 shadow-sm border border-gray-200 text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-4">
-                <Calendar className="w-8 h-8" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Coming Soon</h3>
-              <p className="text-gray-600 max-w-md mx-auto">
-                Hourly forecast charts, tide predictions, and 7-day extended outlook
-              </p>
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Wind Conditions</h2>
+            <div className="max-w-md mx-auto">
+              <WindCompass
+                direction={270}  // W - replace with real data
+                speed={forecastData?.wind_speed || 5}
+                gust={forecastData?.wind_speed ? forecastData.wind_speed * 1.2 : undefined}
+                loading={loading}
+              />
+            </div>
+          </div>
+
+          {/* Charts Section */}
+          <div className="mb-12">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">24-Hour Forecast</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <WaveHeightChart
+                data={generateMockWaveData()}
+                loading={loading}
+              />
+              <TideChart
+                data={generateMockTideData()}
+                loading={loading}
+              />
             </div>
           </div>
 
