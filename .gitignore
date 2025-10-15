@@ -440,8 +440,19 @@ checkpoints/
 data/
 datasets/
 *.csv
-*.json
 *.parquet
+
+# Allow important JSON configuration files
+!package.json
+!tsconfig.json
+!next.config.js
+!tailwind.config.js
+!.eslintrc.json
+!vercel.json
+
+# But ignore data JSON files
+data/**/*.json
+datasets/**/*.json
 
 # API keys and secrets
 secrets/
