@@ -35,13 +35,22 @@ interface SurfCondition {
 }
 
 const Forecast: NextPage = () => {
+  // Default location: Aguadilla, Puerto Rico (Crash Boat)
+  const DEFAULT_COORDS = { lat: 18.4589, lon: -67.1672 }
+  const DEFAULT_SPOT_NAME = "Aguadilla - Crash Boat"
+
   const [forecastData, setForecastData] = useState<SurfCondition | null>(null)
   const [loading, setLoading] = useState(true)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [selectedSpot, setSelectedSpot] = useState<{ name: string; lat: number; lon: number } | null>(null)
-  const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null)
+  const [selectedSpot, setSelectedSpot] = useState<{ name: string; lat: number; lon: number }>({ 
+    name: DEFAULT_SPOT_NAME, 
+    lat: DEFAULT_COORDS.lat, 
+    lon: DEFAULT_COORDS.lon 
+  })
+  // Geolocation deferred to v2
+  // const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null)
 
   // Mock data for charts - replace with real API data later
   const generateMockWaveData = () => {
@@ -91,13 +100,26 @@ const Forecast: NextPage = () => {
       setRefreshing(true)
       setError(null)
       
-      // If lat/lon provided, use global forecast API, otherwise use latest forecast
-      const result = lat && lon 
-        ? await api.fetchGlobalForecast(lat, lon, 24)
-        : await api.fetchLatestForecast()
+      // Use provided lat/lon, or fall back to selectedSpot, or default to Aguadilla
+      const targetLat = lat || selectedSpot.lat
+      const targetLon = lon || selectedSpot.lon
       
-      if (result.status === 'success' && result.data) {
-        setForecastData(result.data)
+      // Always use global forecast API with coordinates
+      const result = await api.fetchGlobalForecast(targetLat, targetLon, 24)
+      
+      if (result && result.summary) {
+        // Map ForecastData to SurfCondition for display
+        const mappedData: SurfCondition = {
+          id: Date.now(),
+          timestamp: result.timestamp,
+          wave_height: result.summary.wave_height_m || null,
+          wave_period: null, // Not available in summary yet
+          wind_speed: result.summary.wind_speed_ms || null,
+          tide_level: result.summary.tide_height_m || null,
+          buoy_id: null,
+        }
+        
+        setForecastData(mappedData)
         setLastUpdate(new Date())
         
         // Show success toast only on manual refresh (not on initial load)
@@ -123,6 +145,13 @@ const Forecast: NextPage = () => {
   }
 
   const handleUseMyLocation = () => {
+    // Geolocation deferred to v2
+    toast('Location services coming soon!', {
+      icon: '📍',
+      duration: 3000,
+    })
+    
+    /* DEFERRED TO V2
     if (!navigator.geolocation) {
       toast.error('Geolocation is not supported by your browser')
       return
@@ -144,19 +173,22 @@ const Forecast: NextPage = () => {
         console.error('Geolocation error:', error)
       }
     )
+    */
   }
 
-  // Fetch forecast data on mount
+  // Fetch forecast data on mount with default Aguadilla coordinates
   useEffect(() => {
-    fetchForecast()
+    fetchForecast(DEFAULT_COORDS.lat, DEFAULT_COORDS.lon)
     
-    // Refresh every 5 minutes
-    const interval = setInterval(fetchForecast, 5 * 60 * 1000)
+    // Refresh every 5 minutes using current selectedSpot coordinates
+    const interval = setInterval(() => {
+      fetchForecast(selectedSpot.lat, selectedSpot.lon)
+    }, 5 * 60 * 1000)
     return () => clearInterval(interval)
   }, [])
 
   const handleRefresh = () => {
-    fetchForecast()
+    fetchForecast(selectedSpot.lat, selectedSpot.lon)
   }
 
   // Convert m/s to mph for display
@@ -195,20 +227,15 @@ const Forecast: NextPage = () => {
                 </div>
                 <div>
                   <h1 className="text-4xl font-bold text-gray-900">
-                    {selectedSpot ? (
-                      <span className="flex items-center gap-2">
-                        <MapPin className="w-8 h-8 text-blue-600" />
-                        {selectedSpot.name}
-                      </span>
-                    ) : (
-                      'Live Surf Forecast'
-                    )}
+                    <span className="flex items-center gap-2">
+                      <MapPin className="w-8 h-8 text-blue-600" />
+                      Forecast for {selectedSpot.name === DEFAULT_SPOT_NAME 
+                        ? 'Aguadilla, Puerto Rico' 
+                        : selectedSpot.name}
+                    </span>
                   </h1>
                   <p className="text-sm text-gray-600 mt-1">
-                    {selectedSpot 
-                      ? `${selectedSpot.lat.toFixed(4)}°N, ${Math.abs(selectedSpot.lon).toFixed(4)}°W`
-                      : 'Real-time conditions from NOAA buoys'
-                    }
+                    {selectedSpot.lat.toFixed(4)}°N, {Math.abs(selectedSpot.lon).toFixed(4)}°W
                   </p>
                 </div>
               </div>
