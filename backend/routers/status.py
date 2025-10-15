@@ -2,7 +2,7 @@
 Status and Health Check API endpoints for SwellSense
 Provides system status and database connectivity checks
 """
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Response, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 import logging
@@ -73,3 +73,58 @@ async def health_check():
         "status": "ok",
         "version": VERSION
     }
+
+
+@router.post("/ingest/trigger")
+async def trigger_ingestion():
+    """
+    Manually trigger NOAA buoy data ingestion
+    Useful for testing or immediate data updates
+    
+    Returns:
+        JSON with ingestion results
+    """
+    try:
+        from services.ingestion_service import ingestion_service
+        
+        logger.info("🔧 Manual ingestion triggered via API")
+        count = await ingestion_service.ingest_all_buoys()
+        
+        return {
+            "status": "success",
+            "message": f"Ingestion completed successfully",
+            "records_inserted": count,
+            "buoys_processed": len(ingestion_service.buoy_stations)
+        }
+    
+    except Exception as e:
+        logger.error(f"❌ Manual ingestion failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ingestion failed: {str(e)}"
+        )
+
+
+@router.get("/ingest/status")
+async def ingestion_status():
+    """
+    Check the status of the background ingestion service
+    
+    Returns:
+        JSON with service status and configuration
+    """
+    try:
+        from services.ingestion_service import ingestion_service, INGESTION_INTERVAL
+        
+        return {
+            "status": "running" if ingestion_service.is_running else "stopped",
+            "buoy_stations": ingestion_service.buoy_stations,
+            "interval_hours": INGESTION_INTERVAL / 3600,
+            "version": VERSION
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get ingestion status: {str(e)}"
+        )

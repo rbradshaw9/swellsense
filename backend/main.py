@@ -11,6 +11,7 @@ load_dotenv()
 
 from database import init_db
 from routers import forecast, ai, status
+from services.ingestion_service import ingestion_service
 
 
 @asynccontextmanager
@@ -18,9 +19,14 @@ async def lifespan(app: FastAPI):
     """Lifespan event handler for startup and shutdown"""
     # Startup: Initialize database
     await init_db()
+    
+    # Start background ingestion service
+    ingestion_service.start()
+    
     yield
-    # Shutdown: Clean up resources
-    pass
+    
+    # Shutdown: Stop background tasks and clean up resources
+    await ingestion_service.stop()
 
 
 # Create FastAPI instance
