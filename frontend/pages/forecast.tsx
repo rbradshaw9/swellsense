@@ -3,6 +3,7 @@ import Head from 'next/head'
 import { useState, useEffect } from 'react'
 import { WavesIcon, RefreshCw, Calendar } from 'lucide-react'
 import ForecastCard from '../components/ui/ForecastCard'
+import { api } from '../utils/api'
 
 interface SurfCondition {
   id: number;
@@ -23,10 +24,7 @@ const Forecast: NextPage = () => {
   const fetchForecast = async () => {
     try {
       setRefreshing(true)
-      // Use environment variable for API URL, fallback to localhost
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${apiUrl}/api/forecast/latest`)
-      const result = await response.json()
+      const result = await api.fetchLatestForecast()
       
       if (result.status === 'success' && result.data) {
         setForecastData(result.data)
