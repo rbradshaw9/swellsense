@@ -19,6 +19,10 @@ python-multipart==0.0.6
 # HTTP client for external APIs
 httpx==0.27.2  # Locked for openai compatibility
 
+# NetCDF and data parsing
+xarray==2024.10.0  # NetCDF parsing for NOAA ERDDAP
+netCDF4==1.7.1.post2  # NetCDF file support
+
 # AI and Machine Learning
 openai==1.54.0  # OpenAI API for SurfGPT
 aiohttp==3.9.1
