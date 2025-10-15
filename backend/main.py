@@ -11,7 +11,7 @@ load_dotenv()
 
 from database import init_db
 from routers import forecast, ai, status
-from services.ingestion_service import ingestion_service
+from scheduler import global_scheduler
 
 
 @asynccontextmanager
@@ -20,13 +20,13 @@ async def lifespan(app: FastAPI):
     # Startup: Initialize database
     await init_db()
     
-    # Start background ingestion service
-    ingestion_service.start()
+    # Start global data ingestion scheduler (runs hourly)
+    global_scheduler.start()
     
     yield
     
     # Shutdown: Stop background tasks and clean up resources
-    await ingestion_service.stop()
+    await global_scheduler.stop()
 
 
 # Create FastAPI instance
