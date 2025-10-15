@@ -1,7 +1,7 @@
 import type { NextPage } from 'next'
 import Head from 'next/head'
 import { useState } from 'react'
-import { ChevronRightIcon, WaveIcon } from 'lucide-react'
+import { ChevronRightIcon, WavesIcon } from 'lucide-react'
 
 const Home: NextPage = () => {
   const [email, setEmail] = useState('')
@@ -35,7 +35,7 @@ const Home: NextPage = () => {
         <nav className="relative px-6 py-4">
           <div className="mx-auto flex max-w-7xl items-center justify-between">
             <div className="flex items-center space-x-2">
-              <WaveIcon className="h-8 w-8 text-blue-600" />
+              <WavesIcon className="h-8 w-8 text-blue-600" />
               <span className="text-2xl font-bold text-gray-900">SwellSense</span>
             </div>
             <div className="hidden md:flex items-center space-x-6">
@@ -140,7 +140,7 @@ const Home: NextPage = () => {
           <div className="mx-auto max-w-7xl px-6 py-8">
             <div className="flex flex-col md:flex-row items-center justify-between">
               <div className="flex items-center space-x-2">
-                <WaveIcon className="h-6 w-6 text-blue-600" />
+                <WavesIcon className="h-6 w-6 text-blue-600" />
                 <span className="font-medium text-gray-900">SwellSense</span>
               </div>
               <p className="mt-4 md:mt-0 text-sm text-gray-500">
