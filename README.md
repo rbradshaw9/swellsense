@@ -119,36 +119,33 @@ Whether you're a beginner looking for gentle waves or an experienced surfer seek
 
 ### Deploy to Vercel
 
-1. **Install Vercel CLI**
+1. **Deploy via GitHub Integration (Recommended)**
+   - Connect your GitHub repo to Vercel
+   - Vercel will automatically deploy on push to main branch
+   - Set environment variables in Vercel dashboard
+
+2. **Deploy via Vercel CLI**
    ```bash
    npm i -g vercel
-   ```
-
-2. **Deploy Frontend**
-   ```bash
-   cd frontend
    vercel --prod
    ```
 
-3. **Deploy Backend as Serverless Functions**
-   ```bash
-   cd backend
-   # Create vercel.json configuration
-   vercel --prod
-   ```
+### Environment Variables in Vercel
 
-### Environment Variables
+Set these in your Vercel project dashboard:
 
-Set these in your Vercel dashboard:
+**Required:**
+- `DATABASE_URL` - Your Neon PostgreSQL connection string
+- `SECRET_KEY` - JWT secret key for authentication
+- `NEXT_PUBLIC_API_URL` - Your API URL (will be auto-generated)
 
-**Frontend:**
-- `NEXT_PUBLIC_API_URL` - Your API URL
-- `NEXT_PUBLIC_APP_URL` - Your frontend URL
+**Optional:**
+- `NOAA_API_KEY` - NOAA data access key (for future features)
+- `OPENWEATHER_API_KEY` - Weather data API key (for future features)
 
-**Backend:**
-- `DATABASE_URL` - PostgreSQL connection string
-- `NOAA_API_KEY` - NOAA data access key
-- `SECRET_KEY` - JWT secret key
+**Project Structure:**
+- Frontend deploys from `/frontend` directory (Next.js)
+- Backend deploys as Vercel serverless functions from `/backend` directory
 
 ### Database Setup
 
