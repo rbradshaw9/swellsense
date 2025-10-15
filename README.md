@@ -218,6 +218,91 @@ Copy the output and use it as your `SECRET_KEY` in Vercel.
 - Frontend deploys from `/frontend` directory (Next.js)
 - Backend currently runs separately (future: serverless functions)
 
+### Deploy Backend to Railway
+
+**SwellSense FastAPI backend is configured for seamless deployment on Railway.app**
+
+Railway provides:
+- Automatic deployments from GitHub
+- Built-in PostgreSQL and environment variables
+- Free tier with 500 hours/month
+- Zero-config Python/FastAPI support
+
+#### 1. Initial Setup
+
+1. **Create Railway Account**
+   - Go to [railway.app](https://railway.app)
+   - Sign up with GitHub
+
+2. **Create New Project**
+   - Click "New Project" → "Deploy from GitHub repo"
+   - Select `rbradshaw9/swellsense`
+   - Railway will detect the `railway.json` configuration
+
+3. **Configure Environment Variables**
+   
+   Add these in Railway dashboard (Settings → Variables):
+   
+   ```bash
+   DATABASE_URL=postgresql://neondb_owner:npg_yLWglz7t0SiK@ep-floral-base-adkze7qi-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+   OPENAI_API_KEY=sk-proj-your-key-here
+   SECRET_KEY=ZtUp_q7nOio0sVnd3Hsau_zhuHiHnwWITIEJM9ci5qawq5x1ivByWfOWHNnDcngT1_w5r2Augu9YdpxTybXpNg
+   ```
+
+4. **Deploy**
+   - Railway will automatically build and deploy
+   - Your API will be live at: `https://swellsense-production.up.railway.app`
+
+#### 2. Verify Deployment
+
+Check Railway logs for successful startup:
+```
+INFO:     Started server process [123]
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:$PORT
+```
+
+Test the live API:
+```bash
+curl -X POST https://swellsense-production.up.railway.app/api/ai/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Should I surf today?", "location": "western PR"}'
+```
+
+Expected response:
+```json
+{
+  "query": "Should I surf today?",
+  "recommendation": "Great conditions for intermediate surfers...",
+  "confidence": 0.85,
+  "station_used": "42085",
+  "region": "Western Puerto Rico"
+}
+```
+
+#### 3. Redeploy
+
+Railway auto-deploys on every push to `main`:
+```bash
+git push origin main
+```
+
+Or manually redeploy from Railway dashboard:
+- Go to Deployments → Click "Deploy"
+
+#### 4. Custom Domain (Optional)
+
+1. Go to Settings → Domains
+2. Add custom domain: `api.swellsense.app`
+3. Update DNS records as instructed
+
+#### Configuration Files
+
+- **`railway.json`**: Railway-specific build and deploy settings
+- **`Procfile`**: Fallback process definition
+- **`backend/requirements.txt`**: Python dependencies
+- **`backend/main.py`**: FastAPI application entry point
+
 ### Database Setup
 
 **Using Neon:**
