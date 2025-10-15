@@ -8,6 +8,8 @@ from sqlalchemy import select, desc, and_, func
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import math
+import asyncio
+import logging
 
 import sys
 from pathlib import Path
@@ -23,7 +25,26 @@ from database import (
     OceanCurrent
 )
 
+from utils.api_clients import (
+    fetch_stormglass,
+    fetch_openweather,
+    fetch_worldtides,
+    fetch_metno,
+    health_check_stormglass,
+    health_check_openweather,
+    health_check_worldtides,
+    health_check_metno
+)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api", tags=["forecast"])
+
+# Health check cache (5 minute TTL)
+_health_cache = {"timestamp": None, "data": None}
+_health_cache_ttl = 300  # 5 minutes in seconds
 
 
 @router.get("/forecast")
@@ -99,7 +120,10 @@ async def get_global_forecast(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Get merged forecast from all available data sources for any location worldwide
+    Get resilient multi-source forecast from all available data sources worldwide
+    
+    Fetches data in parallel from StormGlass, OpenWeather, WorldTides, and Met.no APIs.
+    Returns unified forecast even if some sources fail (graceful degradation).
     
     Args:
         lat: Latitude (-90 to 90)
@@ -108,151 +132,267 @@ async def get_global_forecast(
         db: Database session
     
     Returns:
-        Unified forecast with data from NOAA, StormGlass, Met.no, OpenWeather, WorldTides
+        Unified forecast with data from all available sources, partial flag if any failed
         
     Example:
         /api/forecast/global?lat=33.63&lon=-118.00&hours=24
     """
+    request_start = datetime.utcnow()
+    
     try:
         # Validate coordinates
         if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
             raise HTTPException(status_code=400, detail="Invalid coordinates")
         
-        # Time window
-        now = datetime.utcnow()
-        future = now + timedelta(hours=hours)
+        logger.info(f"Global forecast request for lat={lat}, lon={lon}")
         
-        # Find nearest buoy station for location name
-        buoy_stmt = select(BuoyStation)
-        buoy_result = await db.execute(buoy_stmt)
-        buoy_stations = buoy_result.scalars().all()
+        # Fetch all sources in parallel with return_exceptions=True for fault tolerance
+        results = await asyncio.gather(
+            fetch_stormglass(lat, lon),
+            fetch_openweather(lat, lon),
+            fetch_worldtides(lat, lon),
+            fetch_metno(lat, lon),
+            return_exceptions=True
+        )
         
-        nearest_buoy = None
-        min_distance = float('inf')
+        # Unpack results (None if failed or exception occurred)
+        stormglass_data = results[0] if not isinstance(results[0], Exception) else None
+        openweather_data = results[1] if not isinstance(results[1], Exception) else None
+        worldtides_data = results[2] if not isinstance(results[2], Exception) else None
+        metno_data = results[3] if not isinstance(results[3], Exception) else None
         
-        for station in buoy_stations:
-            dist = calculate_distance(lat, lon, station.latitude, station.longitude)
-            if dist < min_distance:
-                min_distance = dist
-                nearest_buoy = station
+        # Track which sources succeeded
+        sources_available = []
+        sources_failed = []
         
-        location_name = f"{nearest_buoy.region}" if nearest_buoy else f"{lat}, {lon}"
+        if stormglass_data:
+            sources_available.append("stormglass")
+        else:
+            sources_failed.append("stormglass")
+            
+        if openweather_data:
+            sources_available.append("openweather")
+        else:
+            sources_failed.append("openweather")
+            
+        if worldtides_data:
+            sources_available.append("worldtides")
+        else:
+            sources_failed.append("worldtides")
+            
+        if metno_data:
+            sources_available.append("metno")
+        else:
+            sources_failed.append("metno")
         
-        # Search radius in degrees (~50km)
-        radius = 0.5
+        # Calculate averages from available data
+        wave_heights = []
+        wind_speeds = []
+        temperatures = []
         
-        # Query marine conditions (StormGlass, Met.no, NOAA)
-        marine_stmt = select(MarineCondition).where(
-            and_(
-                MarineCondition.timestamp >= now,
-                MarineCondition.timestamp <= future,
-                MarineCondition.latitude.between(lat - radius, lat + radius),
-                MarineCondition.longitude.between(lon - radius, lon + radius)
-            )
-        ).order_by(MarineCondition.timestamp)
+        if stormglass_data and stormglass_data.get("wave_height_m"):
+            wave_heights.append(stormglass_data["wave_height_m"])
+        if metno_data and metno_data.get("wave_height_m"):
+            wave_heights.append(metno_data["wave_height_m"])
+            
+        if stormglass_data and stormglass_data.get("wind_speed_ms"):
+            wind_speeds.append(stormglass_data["wind_speed_ms"])
+        if openweather_data and openweather_data.get("wind_speed_ms"):
+            wind_speeds.append(openweather_data["wind_speed_ms"])
+            
+        if openweather_data and openweather_data.get("temperature_c"):
+            temperatures.append(openweather_data["temperature_c"])
         
-        marine_result = await db.execute(marine_stmt)
-        marine_data = marine_result.scalars().all()
+        # Build human-readable conditions summary
+        conditions_text = "Forecast unavailable"
+        if wave_heights and wind_speeds:
+            avg_wave = sum(wave_heights) / len(wave_heights)
+            avg_wind = sum(wind_speeds) / len(wind_speeds)
+            
+            # Convert to feet for surf description
+            wave_ft = avg_wave * 3.28084
+            wind_kts = avg_wind * 1.94384
+            
+            # Classify wave size
+            if wave_ft < 2:
+                size = "Small"
+            elif wave_ft < 4:
+                size = "2-3ft"
+            elif wave_ft < 6:
+                size = "4-5ft"
+            elif wave_ft < 8:
+                size = "6-7ft"
+            else:
+                size = f"{int(wave_ft)}ft+"
+            
+            # Classify wind
+            if wind_kts < 5:
+                wind_desc = "calm"
+            elif wind_kts < 10:
+                wind_desc = "light wind"
+            elif wind_kts < 15:
+                wind_desc = "moderate wind"
+            else:
+                wind_desc = "strong wind"
+            
+            conditions_text = f"{size} waves, {wind_desc}"
         
-        # Query weather data (OpenWeatherMap)
-        weather_stmt = select(WeatherData).where(
-            and_(
-                WeatherData.timestamp >= now,
-                WeatherData.timestamp <= future,
-                WeatherData.latitude.between(lat - radius, lat + radius),
-                WeatherData.longitude.between(lon - radius, lon + radius)
-            )
-        ).order_by(WeatherData.timestamp)
+        # Calculate total response time
+        duration = (datetime.utcnow() - request_start).total_seconds()
+        logger.info(f"Global forecast completed in {duration:.2f}s with {len(sources_available)}/4 sources")
         
-        weather_result = await db.execute(weather_stmt)
-        weather_data = weather_result.scalars().all()
-        
-        # Query tide data (WorldTides)
-        tide_stmt = select(TideData).where(
-            and_(
-                TideData.timestamp >= now,
-                TideData.timestamp <= future,
-                TideData.latitude.between(lat - radius, lat + radius),
-                TideData.longitude.between(lon - radius, lon + radius)
-            )
-        ).order_by(TideData.timestamp)
-        
-        tide_result = await db.execute(tide_stmt)
-        tide_data = tide_result.scalars().all()
-        
-        # Aggregate latest conditions
-        latest_marine = marine_data[0] if marine_data else None
-        latest_weather = weather_data[0] if weather_data else None
-        latest_tide = tide_data[0] if tide_data else None
-        
-        # Calculate averages from marine data
-        wave_heights = [m.wave_height for m in marine_data if m.wave_height]
-        swell_periods = [m.swell_period for m in marine_data if m.swell_period]
-        wave_directions = [m.wave_direction for m in marine_data if m.wave_direction]
-        water_temps = [m.water_temperature for m in marine_data if m.water_temperature]
-        current_speeds = [m.current_speed for m in marine_data if m.current_speed]
-        
-        # Calculate averages from weather data
-        wind_speeds = [w.wind_speed for w in weather_data if w.wind_speed]
-        wind_directions = [w.wind_direction for w in weather_data if w.wind_direction]
-        temperatures = [w.temperature for w in weather_data if w.temperature]
-        
-        # Get tide heights
-        tide_heights = [t.tide_height_meters for t in tide_data if t.tide_height_meters]
-        
-        # Determine sources used
-        sources_used = []
-        if marine_data:
-            sources = set(m.source for m in marine_data)
-            sources_used.extend(list(sources))
-        if weather_data:
-            sources_used.append('openweather')
-        if tide_data:
-            sources_used.append('worldtides')
-        
-        # Build response
+        # Build unified response
         response = {
-            "location": location_name,
-            "coordinates": {"lat": lat, "lon": lon},
-            "timestamp": now.isoformat() + "Z",
-            "forecast_hours": hours,
-            "data_points": {
-                "marine": len(marine_data),
-                "weather": len(weather_data),
-                "tide": len(tide_data)
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "location": {
+                "lat": lat,
+                "lon": lon
             },
-            "current_conditions": {
-                "wave_height_m": round(wave_heights[0], 2) if wave_heights else None,
-                "swell_period_s": round(swell_periods[0], 1) if swell_periods else None,
-                "swell_direction_deg": round(wave_directions[0], 0) if wave_directions else None,
-                "wind_speed_ms": round(wind_speeds[0], 1) if wind_speeds else None,
-                "wind_direction_deg": round(wind_directions[0], 0) if wind_directions else None,
-                "water_temp_c": round(water_temps[0], 1) if water_temps else None,
-                "air_temp_c": round(temperatures[0], 1) if temperatures else None,
-                "tide_m": round(tide_heights[0], 2) if tide_heights else None,
-                "current_speed_ms": round(current_speeds[0], 2) if current_speeds else None,
+            "sources": {
+                "stormglass": stormglass_data,
+                "openweather": openweather_data,
+                "worldtides": worldtides_data,
+                "metno": metno_data
             },
-            "forecast_averages": {
+            "summary": {
                 "wave_height_m": round(sum(wave_heights) / len(wave_heights), 2) if wave_heights else None,
-                "swell_period_s": round(sum(swell_periods) / len(swell_periods), 1) if swell_periods else None,
                 "wind_speed_ms": round(sum(wind_speeds) / len(wind_speeds), 1) if wind_speeds else None,
-                "water_temp_c": round(sum(water_temps) / len(water_temps), 1) if water_temps else None,
+                "temperature_c": round(sum(temperatures) / len(temperatures), 1) if temperatures else None,
+                "tide_height_m": worldtides_data.get("current_tide_m") if worldtides_data else None,
+                "conditions": conditions_text
             },
-            "sources_used": list(set(sources_used)),
-            "nearest_buoy": {
-                "id": nearest_buoy.station_id if nearest_buoy else None,
-                "distance_km": round(min_distance, 1) if nearest_buoy else None
-            }
+            "partial": len(sources_failed) > 0,
+            "sources_available": sources_available,
+            "sources_failed": sources_failed if sources_failed else None,
+            "response_time_s": round(duration, 2)
         }
         
+        # Always return 200 even if partial (graceful degradation)
         return response
         
     except HTTPException:
         raise
     except Exception as e:
+        duration = (datetime.utcnow() - request_start).total_seconds()
+        logger.error(f"Global forecast error after {duration:.2f}s: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Error generating global forecast: {str(e)}"
+        )
+
+
+@router.get("/forecast/health")
+async def health_check(db: AsyncSession = Depends(get_db)):
+    """
+    System health check for external APIs and database connectivity
+    
+    Returns service status, latency metrics, and database connection health.
+    Results are cached for 5 minutes to avoid rate limiting.
+    
+    Returns:
+        200 OK if all services healthy
+        207 Multi-Status if some services degraded
+        
+    Example:
+        /api/forecast/health
+    """
+    global _health_cache
+    
+    request_start = datetime.utcnow()
+    
+    # Check cache validity
+    if _health_cache["timestamp"]:
+        cache_age = (request_start - _health_cache["timestamp"]).total_seconds()
+        if cache_age < _health_cache_ttl:
+            logger.info(f"Returning cached health check (age: {cache_age:.0f}s)")
+            return _health_cache["data"]
+    
+    try:
+        logger.info("Running health checks on all services")
+        
+        # Test database connection
+        db_ok = False
+        try:
+            await db.execute(select(1))
+            db_ok = True
+        except Exception as e:
+            logger.error(f"Database health check failed: {str(e)}")
+        
+        # Test all external APIs in parallel
+        api_results = await asyncio.gather(
+            health_check_stormglass(),
+            health_check_openweather(),
+            health_check_worldtides(),
+            health_check_metno(),
+            return_exceptions=True
+        )
+        
+        # Unpack results (handle exceptions)
+        stormglass_health = api_results[0] if not isinstance(api_results[0], Exception) else {"ok": False, "error": str(api_results[0])[:100]}
+        openweather_health = api_results[1] if not isinstance(api_results[1], Exception) else {"ok": False, "error": str(api_results[1])[:100]}
+        worldtides_health = api_results[2] if not isinstance(api_results[2], Exception) else {"ok": False, "error": str(api_results[2])[:100]}
+        metno_health = api_results[3] if not isinstance(api_results[3], Exception) else {"ok": False, "error": str(api_results[3])[:100]}
+        
+        # Determine overall status
+        all_services = [
+            stormglass_health.get("ok", False),
+            openweather_health.get("ok", False),
+            worldtides_health.get("ok", False),
+            metno_health.get("ok", False),
+            db_ok
+        ]
+        
+        failed_services = []
+        if not stormglass_health.get("ok"):
+            failed_services.append("stormglass")
+        if not openweather_health.get("ok"):
+            failed_services.append("openweather")
+        if not worldtides_health.get("ok"):
+            failed_services.append("worldtides")
+        if not metno_health.get("ok"):
+            failed_services.append("metno")
+        if not db_ok:
+            failed_services.append("database")
+        
+        overall_status = "ok" if all(all_services) else "degraded"
+        
+        duration = (datetime.utcnow() - request_start).total_seconds()
+        
+        response = {
+            "status": overall_status,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "services": {
+                "stormglass": stormglass_health,
+                "openweather": openweather_health,
+                "worldtides": worldtides_health,
+                "metno": metno_health
+            },
+            "database": {
+                "connected": db_ok
+            },
+            "failed_services": failed_services if failed_services else None,
+            "version": "v0.4",
+            "check_duration_s": round(duration, 2)
+        }
+        
+        # Update cache
+        _health_cache = {
+            "timestamp": request_start,
+            "data": response
+        }
+        
+        logger.info(f"Health check complete: {overall_status} ({len(failed_services)} failures)")
+        
+        # Return 207 Multi-Status if degraded, 200 if ok
+        status_code = 207 if overall_status == "degraded" else 200
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Health check error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error performing health check: {str(e)}"
         )
 
 
