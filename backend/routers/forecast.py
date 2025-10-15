@@ -36,6 +36,9 @@ from utils.api_clients import (
     health_check_metno
 )
 
+from utils.fetch_noaa_gfs import fetch_noaa_gfs, health_check_noaa_gfs
+from utils.fetch_era5 import fetch_era5, health_check_era5
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -147,11 +150,14 @@ async def get_global_forecast(
         logger.info(f"Global forecast request for lat={lat}, lon={lon}")
         
         # Fetch all sources in parallel with return_exceptions=True for fault tolerance
+        # Includes regional APIs + global models (NOAA GFS, ERA5)
         results = await asyncio.gather(
             fetch_stormglass(lat, lon),
             fetch_openweather(lat, lon),
             fetch_worldtides(lat, lon),
             fetch_metno(lat, lon),
+            fetch_noaa_gfs(lat, lon),
+            fetch_era5(lat, lon),
             return_exceptions=True
         )
         
@@ -160,6 +166,8 @@ async def get_global_forecast(
         openweather_data = results[1] if not isinstance(results[1], Exception) else None
         worldtides_data = results[2] if not isinstance(results[2], Exception) else None
         metno_data = results[3] if not isinstance(results[3], Exception) else None
+        noaa_gfs_data = results[4] if not isinstance(results[4], Exception) else None
+        era5_data = results[5] if not isinstance(results[5], Exception) else None
         
         # Track which sources succeeded
         sources_available = []
@@ -185,6 +193,16 @@ async def get_global_forecast(
         else:
             sources_failed.append("metno")
         
+        if noaa_gfs_data and noaa_gfs_data.get("available") is not False:
+            sources_available.append("noaa_gfs")
+        else:
+            sources_failed.append("noaa_gfs")
+        
+        if era5_data and era5_data.get("available") is not False:
+            sources_available.append("era5")
+        else:
+            sources_failed.append("era5")
+        
         # Calculate averages from available data
         wave_heights = []
         wind_speeds = []
@@ -194,11 +212,19 @@ async def get_global_forecast(
             wave_heights.append(stormglass_data["wave_height_m"])
         if metno_data and metno_data.get("wave_height_m"):
             wave_heights.append(metno_data["wave_height_m"])
+        if noaa_gfs_data and noaa_gfs_data.get("wave_height_m"):
+            wave_heights.append(noaa_gfs_data["wave_height_m"])
+        if era5_data and era5_data.get("wave_height_m"):
+            wave_heights.append(era5_data["wave_height_m"])
             
         if stormglass_data and stormglass_data.get("wind_speed_ms"):
             wind_speeds.append(stormglass_data["wind_speed_ms"])
         if openweather_data and openweather_data.get("wind_speed_ms"):
             wind_speeds.append(openweather_data["wind_speed_ms"])
+        if noaa_gfs_data and noaa_gfs_data.get("wind_speed_ms"):
+            wind_speeds.append(noaa_gfs_data["wind_speed_ms"])
+        if era5_data and era5_data.get("wind_speed_ms"):
+            wind_speeds.append(era5_data["wind_speed_ms"])
             
         if openweather_data and openweather_data.get("temperature_c"):
             temperatures.append(openweather_data["temperature_c"])
@@ -239,7 +265,7 @@ async def get_global_forecast(
         
         # Calculate total response time
         duration = (datetime.utcnow() - request_start).total_seconds()
-        logger.info(f"Global forecast completed in {duration:.2f}s with {len(sources_available)}/4 sources")
+        logger.info(f"Global forecast completed in {duration:.2f}s with {len(sources_available)}/6 sources")
         
         # Build unified response
         response = {
@@ -252,7 +278,9 @@ async def get_global_forecast(
                 "stormglass": stormglass_data,
                 "openweather": openweather_data,
                 "worldtides": worldtides_data,
-                "metno": metno_data
+                "metno": metno_data,
+                "noaa_gfs": noaa_gfs_data,
+                "era5": era5_data
             },
             "summary": {
                 "wave_height_m": round(sum(wave_heights) / len(wave_heights), 2) if wave_heights else None,
@@ -324,6 +352,8 @@ async def health_check(db: AsyncSession = Depends(get_db)):
             health_check_openweather(),
             health_check_worldtides(),
             health_check_metno(),
+            health_check_noaa_gfs(),
+            health_check_era5(),
             return_exceptions=True
         )
         
@@ -332,6 +362,8 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         openweather_health = api_results[1] if not isinstance(api_results[1], Exception) else {"ok": False, "error": str(api_results[1])[:100]}
         worldtides_health = api_results[2] if not isinstance(api_results[2], Exception) else {"ok": False, "error": str(api_results[2])[:100]}
         metno_health = api_results[3] if not isinstance(api_results[3], Exception) else {"ok": False, "error": str(api_results[3])[:100]}
+        noaa_gfs_health = api_results[4] if not isinstance(api_results[4], Exception) else {"ok": False, "error": str(api_results[4])[:100]}
+        era5_health = api_results[5] if not isinstance(api_results[5], Exception) else {"ok": False, "error": str(api_results[5])[:100]}
         
         # Determine overall status
         all_services = [
@@ -339,6 +371,8 @@ async def health_check(db: AsyncSession = Depends(get_db)):
             openweather_health.get("ok", False),
             worldtides_health.get("ok", False),
             metno_health.get("ok", False),
+            noaa_gfs_health.get("ok", False),
+            era5_health.get("ok", False),
             db_ok
         ]
         
@@ -351,6 +385,10 @@ async def health_check(db: AsyncSession = Depends(get_db)):
             failed_services.append("worldtides")
         if not metno_health.get("ok"):
             failed_services.append("metno")
+        if not noaa_gfs_health.get("ok"):
+            failed_services.append("noaa_gfs")
+        if not era5_health.get("ok"):
+            failed_services.append("era5")
         if not db_ok:
             failed_services.append("database")
         
@@ -365,7 +403,9 @@ async def health_check(db: AsyncSession = Depends(get_db)):
                 "stormglass": stormglass_health,
                 "openweather": openweather_health,
                 "worldtides": worldtides_health,
-                "metno": metno_health
+                "metno": metno_health,
+                "noaa_gfs": noaa_gfs_health,
+                "era5": era5_health
             },
             "database": {
                 "connected": db_ok

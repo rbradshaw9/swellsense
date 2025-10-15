@@ -1,6 +1,14 @@
 """
 API client utilities for external forecast data sources
 Handles timeouts, retries, and graceful error handling
+
+Supports:
+- StormGlass API (marine forecasts)
+- OpenWeatherMap API (weather)
+- WorldTides API (tide data)
+- Met.no API (ocean forecasts)
+- NOAA GFS/WaveWatch III (global wave model)
+- Copernicus ERA5 (global reanalysis)
 """
 import httpx
 import logging
