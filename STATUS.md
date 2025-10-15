@@ -24,6 +24,9 @@ SwellSense is an AI-powered surf forecasting platform that combines real-time NO
   - Real-time NOAA data context
   - Skill-level personalization (beginner/intermediate/advanced)
   - Structured JSON responses with confidence scores
+  - **Multi-buoy support**: 7 regions (FL, PR, Gulf, CA, HI)
+  - **Location awareness**: Auto-selects buoy by region or coordinates
+  - **Nearest buoy algorithm**: Haversine distance calculation
 - ✅ NOAA NDBC data ingestion pipeline
   - Real-time buoy data fetching
   - Intelligent parsing of NOAA text format

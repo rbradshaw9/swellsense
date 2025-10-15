@@ -15,7 +15,8 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from database import get_db, SurfCondition
+from database import get_db, SurfCondition, BuoyStation
+from utils.buoy_utils import get_buoy_by_location, get_default_buoy
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -28,6 +29,8 @@ class AIQuery(BaseModel):
     """Request model for AI surf queries"""
     query: str
     location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     skill_level: Optional[str] = "intermediate"  # beginner, intermediate, advanced
 
 
@@ -38,22 +41,29 @@ class AIResponse(BaseModel):
     confidence: float
     explanation: str
     data_timestamp: Optional[str] = None
+    station_used: Optional[str] = None
+    region: Optional[str] = None
 
 
-async def fetch_recent_surf_data(db: AsyncSession, hours: int = 24) -> dict:
+async def fetch_recent_surf_data(db: AsyncSession, buoy_id: Optional[str] = None, hours: int = 24) -> dict:
     """
     Fetch recent surf conditions from database for AI context
     
     Args:
         db: Database session
+        buoy_id: Optional specific buoy to query
         hours: Number of hours of historical data to fetch
     
     Returns:
         Dictionary with formatted surf data
     """
     try:
-        # Get most recent reading
-        latest_query = select(SurfCondition).order_by(desc(SurfCondition.timestamp)).limit(1)
+        # Build query with optional buoy filter
+        latest_query = select(SurfCondition)
+        if buoy_id:
+            latest_query = latest_query.where(SurfCondition.buoy_id == buoy_id)
+        latest_query = latest_query.order_by(desc(SurfCondition.timestamp)).limit(1)
+        
         latest_result = await db.execute(latest_query)
         latest = latest_result.scalar_one_or_none()
         
@@ -61,7 +71,10 @@ async def fetch_recent_surf_data(db: AsyncSession, hours: int = 24) -> dict:
         time_threshold = datetime.utcnow() - timedelta(hours=hours)
         recent_query = select(SurfCondition).where(
             SurfCondition.timestamp >= time_threshold
-        ).order_by(desc(SurfCondition.timestamp)).limit(10)
+        )
+        if buoy_id:
+            recent_query = recent_query.where(SurfCondition.buoy_id == buoy_id)
+        recent_query = recent_query.order_by(desc(SurfCondition.timestamp)).limit(10)
         
         recent_result = await db.execute(recent_query)
         recent_conditions = recent_result.scalars().all()
@@ -256,37 +269,62 @@ async def ai_query(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    AI-powered surf query endpoint
+    AI-powered surf query endpoint with location awareness
     
     Accepts natural language questions about surf conditions and returns
     intelligent recommendations based on real-time NOAA buoy data.
     
+    Supports multiple location formats:
+    - Location string: "western PR", "California", "Florida"
+    - Coordinates: latitude=18.4, longitude=-67.2
+    
     Example queries:
-    - "Where should I surf tomorrow?"
-    - "Are the conditions good for a beginner right now?"
+    - "Where should I surf tomorrow?" (location="western PR")
+    - "Are the conditions good for a beginner right now?" (latitude=29.2, longitude=-79.9)
     - "What time is best to surf today?"
     - "Is the swell quality good?"
     
     Args:
-        query: AIQuery object with user question and optional parameters
+        query: AIQuery object with user question and optional location/coordinates
         db: Database session
     
     Returns:
-        AIResponse with recommendation, confidence score, and explanation
+        AIResponse with recommendation, confidence score, explanation, and location info
     """
     try:
-        logger.info(f"AI Query received: {query.query} (skill: {query.skill_level})")
+        logger.info(f"AI Query received: {query.query} (skill: {query.skill_level}, location: {query.location})")
         
-        # Step 1: Fetch recent surf data from database
-        surf_data = await fetch_recent_surf_data(db, hours=24)
+        # Step 1: Determine which buoy to use based on location
+        buoy = None
+        if query.location or (query.latitude and query.longitude):
+            buoy = await get_buoy_by_location(
+                db,
+                location=query.location,
+                latitude=query.latitude,
+                longitude=query.longitude
+            )
+            if buoy:
+                logger.info(f"Selected buoy: {buoy.station_id} ({buoy.name}) in {buoy.region}")
+            else:
+                logger.warning(f"No buoy found for location: {query.location or f'({query.latitude}, {query.longitude})'}")
         
-        # Step 2: Build AI prompt with context
+        # Fallback to default buoy if no location match
+        if not buoy:
+            buoy = await get_default_buoy(db)
+            if buoy:
+                logger.info(f"Using default buoy: {buoy.station_id} ({buoy.name})")
+        
+        # Step 2: Fetch recent surf data from selected buoy
+        buoy_id = buoy.station_id if buoy else None
+        surf_data = await fetch_recent_surf_data(db, buoy_id=buoy_id, hours=24)
+        
+        # Step 3: Build AI prompt with context
         prompt = build_ai_prompt(query.query, surf_data, query.skill_level)
         
-        # Step 3: Call OpenAI API
+        # Step 4: Call OpenAI API
         ai_response = await call_openai_api(prompt)
         
-        # Step 4: Format and return response
+        # Step 5: Format and return response
         data_timestamp = surf_data.get("current", {}).get("timestamp") if surf_data["status"] == "success" else None
         
         response = AIResponse(
@@ -294,10 +332,12 @@ async def ai_query(
             recommendation=ai_response["recommendation"],
             confidence=ai_response["confidence"],
             explanation=ai_response["explanation"],
-            data_timestamp=data_timestamp
+            data_timestamp=data_timestamp,
+            station_used=buoy.station_id if buoy else None,
+            region=buoy.region if buoy else None
         )
         
-        logger.info(f"AI response generated with confidence: {response.confidence}")
+        logger.info(f"AI response generated with confidence: {response.confidence} (buoy: {response.station_used})")
         
         return response
         

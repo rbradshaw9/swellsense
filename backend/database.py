@@ -67,6 +67,53 @@ class SurfCondition(Base):
         }
 
 
+class BuoyStation(Base):
+    """Model for NOAA buoy station metadata and locations"""
+    __tablename__ = "buoy_stations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    station_id = Column(String(10), unique=True, nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    region = Column(String(100), nullable=False, index=True)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        """Convert model to dictionary"""
+        return {
+            "id": self.id,
+            "station_id": self.station_id,
+            "name": self.name,
+            "region": self.region,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+    
+    def distance_to(self, lat: float, lon: float) -> float:
+        """
+        Calculate distance in miles from this buoy to given coordinates
+        Uses Haversine formula
+        """
+        import math
+        
+        # Earth radius in miles
+        R = 3959
+        
+        lat1_rad = math.radians(self.latitude)
+        lat2_rad = math.radians(lat)
+        delta_lat = math.radians(lat - self.latitude)
+        delta_lon = math.radians(lon - self.longitude)
+        
+        a = (math.sin(delta_lat / 2) ** 2 +
+             math.cos(lat1_rad) * math.cos(lat2_rad) *
+             math.sin(delta_lon / 2) ** 2)
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        
+        return R * c
+
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency for getting async database sessions"""
     async with AsyncSessionLocal() as session:

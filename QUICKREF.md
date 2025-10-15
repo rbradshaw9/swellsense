@@ -4,19 +4,26 @@
 
 ### AI Query (SurfGPT)
 ```bash
-# Get AI surf recommendations
+# Get AI surf recommendations with location
 curl -X POST http://localhost:8000/api/ai/query \
   -H "Content-Type: application/json" \
-  -d '{"query": "Should I surf today?", "skill_level": "intermediate"}'
+  -d '{"query": "Should I surf today?", "location": "western PR", "skill_level": "intermediate"}'
 
 # Response:
 # {
 #   "query": "Should I surf today?",
-#   "recommendation": "Yes! Great conditions for intermediate surfers...",
+#   "recommendation": "Great conditions for intermediate surfers...",
 #   "confidence": 0.85,
-#   "explanation": "Current 3.3ft waves with 8.7s period and light 11mph winds...",
-#   "data_timestamp": "2025-10-15T15:40:00"
+#   "explanation": "Current 2.0ft waves with light winds...",
+#   "data_timestamp": "2025-10-15T16:00:00",
+#   "station_used": "42085",
+#   "region": "Western Puerto Rico"
 # }
+
+# Query with coordinates (finds nearest buoy)
+curl -X POST http://localhost:8000/api/ai/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Where should I surf?", "latitude": 29.2, "longitude": -79.9}'
 ```
 
 ```

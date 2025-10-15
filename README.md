@@ -264,35 +264,62 @@ Once the backend is running, access the interactive API documentation at:
 
 **POST /api/ai/query**
 - Get intelligent surf recommendations powered by OpenAI and real-time NOAA data
+- **Multi-Buoy Support**: Automatically selects the best buoy based on location
 - Request body:
   ```json
   {
     "query": "Should I surf today?",
-    "skill_level": "intermediate",
-    "location": "optional"
+    "location": "western PR",
+    "skill_level": "intermediate"
   }
   ```
 - Parameters:
   - `query` (string, required): Natural language question about surf conditions
+  - `location` (string, optional): Location name ("western PR", "Florida", "California")
+  - `latitude` (float, optional): Latitude coordinate for nearest buoy
+  - `longitude` (float, optional): Longitude coordinate for nearest buoy
   - `skill_level` (string, optional): "beginner", "intermediate", or "advanced" (default: "intermediate")
-  - `location` (string, optional): Specific location for recommendations
 - Returns:
   ```json
   {
-    "query": "Should I surf today?",
-    "recommendation": "Yes! Conditions are ideal for intermediate surfers...",
-    "confidence": 0.85,
-    "explanation": "Based on current 3.3ft waves with 8.7s period and 11mph winds...",
-    "data_timestamp": "2025-10-15T15:40:00"
+    "query": "Where should I surf right now?",
+    "recommendation": "Head to Jobos Beach or Playa Punta Higuero...",
+    "confidence": 0.75,
+    "explanation": "The current wave height of 2.0ft is suitable for intermediate surfers...",
+    "data_timestamp": "2025-10-15T16:00:00",
+    "station_used": "42085",
+    "region": "Western Puerto Rico"
   }
   ```
 
 **Example Usage:**
 ```bash
+# Query with location string
 curl -X POST http://localhost:8000/api/ai/query \
   -H "Content-Type: application/json" \
-  -d '{"query": "Where should I surf tomorrow?", "skill_level": "beginner"}'
+  -d '{"query": "Where should I surf tomorrow?", "location": "western PR", "skill_level": "beginner"}'
+
+# Query with coordinates (finds nearest buoy)
+curl -X POST http://localhost:8000/api/ai/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Are conditions good right now?", "latitude": 18.4, "longitude": -67.2}'
+
+# Query with default location
+curl -X POST http://localhost:8000/api/ai/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Should I surf today?"}'
 ```
+
+**Supported Regions:**
+| Region | Buoy ID | Location |
+|--------|---------|----------|
+| Florida | 41043 | East of St. Augustine, FL |
+| Western Puerto Rico | 42085 | Aguadilla |
+| Puerto Rico | 42059 | Mona Passage |
+| Gulf of Mexico | 42003 | East of Pensacola, FL |
+| Northern California | 46023 | Point Arena, CA |
+| Southern California | 46218 | Santa Barbara, CA |
+| Hawaii | 51201 | Northwest Hawaii |
 
 **Environment Variables:**
 - `OPENAI_API_KEY`: Your OpenAI API key (get it at https://platform.openai.com/api-keys)
