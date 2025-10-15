@@ -2,11 +2,13 @@ import type { NextPage } from 'next'
 import Head from 'next/head'
 import { useState, useEffect } from 'react'
 import { WavesIcon, RefreshCw, Calendar, AlertTriangle } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { api } from '../utils/api'
 import WaveHeightChart from '../components/charts/WaveHeightChart'
 import TideChart from '../components/charts/TideChart'
 import WindCompass from '../components/charts/WindCompass'
 import DataCard from '../components/charts/DataCard'
+import ErrorBoundary from '../components/ErrorBoundary'
 
 interface SurfCondition {
   id: number;
@@ -77,10 +79,17 @@ const Forecast: NextPage = () => {
       if (result.status === 'success' && result.data) {
         setForecastData(result.data)
         setLastUpdate(new Date())
+        
+        // Show success toast only on manual refresh (not on initial load)
+        if (!loading) {
+          toast.success('Forecast updated successfully')
+        }
       }
     } catch (err) {
       console.error('Error fetching forecast:', err)
-      setError(err instanceof Error ? err.message : 'Failed to fetch forecast data')
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch forecast data'
+      setError(errorMessage)
+      toast.error('Error fetching forecast')
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -145,7 +154,7 @@ const Forecast: NextPage = () => {
                 className="inline-flex items-center px-4 py-2 rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors disabled:opacity-50"
               >
                 <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                Refresh
+                Refresh Forecast
               </button>
             </div>
 
@@ -173,92 +182,95 @@ const Forecast: NextPage = () => {
             )}
           </div>
 
-          {/* Current Conditions Data Cards */}
-          <div className="mb-12">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Current Conditions</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <DataCard
-                icon="wave"
-                title="Wave Height"
-                value={waveHeightFt}
-                unit="ft"
-                subtitle={forecastData?.wave_period ? `${forecastData.wave_period.toFixed(1)}s period` : undefined}
-                quality={getWaveQuality(forecastData?.wave_height || null)}
-                loading={loading}
-              />
-              <DataCard
-                icon="wind"
-                title="Wind Speed"
-                value={windSpeedMph}
-                unit="mph"
-                subtitle={forecastData?.wind_speed ? `${(forecastData.wind_speed * 1.944).toFixed(1)} kts` : undefined}
-                loading={loading}
-              />
-              <DataCard
-                icon="temp"
-                title="Water Temp"
-                value="68"
-                unit="°F"
-                subtitle="Comfortable"
-                loading={loading}
-              />
-              <DataCard
-                icon="tide"
-                title="Tide Height"
-                value={tideLevelFt}
-                unit="ft"
-                subtitle="Rising"
-                trend="up"
-                loading={loading}
-              />
+          {/* Wrap main content in ErrorBoundary */}
+          <ErrorBoundary>
+            {/* Current Conditions Data Cards */}
+            <div className="mb-12">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-6">Current Conditions</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <DataCard
+                  icon="wave"
+                  title="Wave Height"
+                  value={waveHeightFt}
+                  unit="ft"
+                  subtitle={forecastData?.wave_period ? `${forecastData.wave_period.toFixed(1)}s period` : undefined}
+                  quality={getWaveQuality(forecastData?.wave_height || null)}
+                  loading={loading}
+                />
+                <DataCard
+                  icon="wind"
+                  title="Wind Speed"
+                  value={windSpeedMph}
+                  unit="mph"
+                  subtitle={forecastData?.wind_speed ? `${(forecastData.wind_speed * 1.944).toFixed(1)} kts` : undefined}
+                  loading={loading}
+                />
+                <DataCard
+                  icon="temp"
+                  title="Water Temp"
+                  value="68"
+                  unit="°F"
+                  subtitle="Comfortable"
+                  loading={loading}
+                />
+                <DataCard
+                  icon="tide"
+                  title="Tide Height"
+                  value={tideLevelFt}
+                  unit="ft"
+                  subtitle="Rising"
+                  trend="up"
+                  loading={loading}
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Wind Compass */}
-          <div className="mb-12">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Wind Conditions</h2>
-            <div className="max-w-md mx-auto">
-              <WindCompass
-                direction={270}  // W - replace with real data
-                speed={forecastData?.wind_speed || 5}
-                gust={forecastData?.wind_speed ? forecastData.wind_speed * 1.2 : undefined}
-                loading={loading}
-              />
+            {/* Wind Compass */}
+            <div className="mb-12">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-6">Wind Conditions</h2>
+              <div className="max-w-md mx-auto">
+                <WindCompass
+                  direction={270}  // W - replace with real data
+                  speed={forecastData?.wind_speed || 5}
+                  gust={forecastData?.wind_speed ? forecastData.wind_speed * 1.2 : undefined}
+                  loading={loading}
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Charts Section */}
-          <div className="mb-12">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">24-Hour Forecast</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <WaveHeightChart
-                data={generateMockWaveData()}
-                loading={loading}
-              />
-              <TideChart
-                data={generateMockTideData()}
-                loading={loading}
-              />
+            {/* Charts Section */}
+            <div className="mb-12">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-6">24-Hour Forecast</h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <WaveHeightChart
+                  data={generateMockWaveData()}
+                  loading={loading}
+                />
+                <TideChart
+                  data={generateMockTideData()}
+                  loading={loading}
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Info Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-blue-50 rounded-xl p-6 border border-blue-200">
-              <h3 className="font-semibold text-gray-900 mb-2">📊 Data Source</h3>
-              <p className="text-sm text-gray-700">
-                Live data from NOAA National Data Buoy Center (NDBC). 
-                Buoy stations provide wave height, period, wind speed, and more.
-              </p>
+            {/* Info Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-blue-50 rounded-xl p-6 border border-blue-200">
+                <h3 className="font-semibold text-gray-900 mb-2">📊 Data Source</h3>
+                <p className="text-sm text-gray-700">
+                  Live data from NOAA National Data Buoy Center (NDBC). 
+                  Buoy stations provide wave height, period, wind speed, and more.
+                </p>
+              </div>
+              <div className="bg-cyan-50 rounded-xl p-6 border border-cyan-200">
+                <h3 className="font-semibold text-gray-900 mb-2">🔄 Update Frequency</h3>
+                <p className="text-sm text-gray-700">
+                  Conditions update every 3 hours from NOAA. 
+                  This page auto-refreshes every 5 minutes to stay current.
+                </p>
+              </div>
             </div>
-            <div className="bg-cyan-50 rounded-xl p-6 border border-cyan-200">
-              <h3 className="font-semibold text-gray-900 mb-2">🔄 Update Frequency</h3>
-              <p className="text-sm text-gray-700">
-                Conditions update every 3 hours from NOAA. 
-                This page auto-refreshes every 5 minutes to stay current.
-              </p>
-            </div>
-          </div>
+          </ErrorBoundary>
         </div>
       </div>
     </>
