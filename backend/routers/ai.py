@@ -460,3 +460,149 @@ async def ai_query(
             status_code=500,
             detail=f"Internal server error: {str(e)}"
         )
+
+
+class ForecastInterpretRequest(BaseModel):
+    """Request model for AI forecast interpretation"""
+    timestamp: str
+    location: dict  # {lat: float, lon: float}
+    sources: dict  # Source data from global forecast
+    summary: dict  # Summary metrics
+    partial: bool
+    sources_available: list[str]
+    sources_failed: Optional[list[str]] = None
+    response_time_s: float
+
+
+class ForecastInterpretResponse(BaseModel):
+    """Response model for AI forecast interpretation"""
+    summary: str
+    timestamp: str
+
+
+@router.post("/forecast/interpret", response_model=ForecastInterpretResponse)
+async def interpret_forecast(request: ForecastInterpretRequest):
+    """
+    AI-powered 48-hour surf forecast interpretation endpoint
+    
+    Accepts global forecast data and generates a natural language summary
+    with predictions for the next 24-48 hours.
+    
+    The AI analyzes:
+    - Current conditions (wave height, period, wind, tide)
+    - Trends and patterns in the data
+    - Likely evolution over next 48 hours
+    - Surfability windows and recommendations
+    
+    Returns a 3-part forecast:
+    1. Current Conditions - What's happening now
+    2. Next 24-48 Hours - Predicted evolution
+    3. Surf Outlook & Advice - Time windows and board recommendations
+    
+    Args:
+        request: ForecastInterpretRequest with global forecast data
+    
+    Returns:
+        ForecastInterpretResponse with AI-generated forecast summary
+    """
+    try:
+        logger.info(f"Forecast interpret request for location: ({request.location.get('lat')}, {request.location.get('lon')})")
+        
+        # Extract key metrics from summary
+        wave_height_m = request.summary.get('wave_height_m', 'N/A')
+        wind_speed_ms = request.summary.get('wind_speed_ms', 'N/A')
+        temperature_c = request.summary.get('temperature_c', 'N/A')
+        tide_height_m = request.summary.get('tide_height_m', 'N/A')
+        conditions = request.summary.get('conditions', 'Unknown')
+        
+        # Extract source data for trend analysis
+        sources_text = []
+        for source_name, source_data in request.sources.items():
+            if source_data and isinstance(source_data, dict):
+                sources_text.append(f"- {source_name.upper()}: Available")
+        
+        # Build comprehensive context for AI
+        forecast_context = f"""
+🌊 CURRENT SURF CONDITIONS
+Location: {request.location.get('lat')}°N, {abs(request.location.get('lon'))}°W
+Timestamp: {request.timestamp}
+Data Quality: {'Partial' if request.partial else 'Complete'} ({len(request.sources_available)} sources)
+
+📊 MEASUREMENTS:
+• Wave Height: {wave_height_m}m ({wave_height_m * 3.281:.1f}ft if wave_height_m != 'N/A' else 'N/A')
+• Wind Speed: {wind_speed_ms}m/s ({wind_speed_ms * 2.237:.1f}mph if wind_speed_ms != 'N/A' else 'N/A')
+• Water Temperature: {temperature_c}°C ({temperature_c * 1.8 + 32:.1f}°F if temperature_c != 'N/A' else 'N/A')
+• Tide Height: {tide_height_m}m ({tide_height_m * 3.281:.1f}ft if tide_height_m != 'N/A' else 'N/A')
+• Conditions: {conditions}
+
+📡 DATA SOURCES:
+{chr(10).join(sources_text)}
+
+⚠️ Failed Sources: {', '.join(request.sources_failed) if request.sources_failed else 'None'}
+"""
+        
+        # Build AI prompt for forecast interpretation
+        system_prompt = """You are SwellSense, a surf forecasting AI assistant for Puerto Rico and beyond.
+
+Analyze the forecast data (wave height, period, direction, wind, tide, etc.) and write a clear 3-part summary for surfers:
+
+**1️⃣ Current Conditions** — Describe what's happening now in natural, conversational language. Use surfer terminology like 'glassy', 'onshore', 'offshore', 'clean', 'choppy', 'set waves', etc.
+
+**2️⃣ Next 24–48 Hours** — Predict how conditions will evolve:
+- Will the swell be building, holding steady, or dropping?
+- Are winds shifting (offshore → onshore, or vice versa)?
+- How will tides affect surfability?
+- When will the best windows occur?
+
+**3️⃣ Surf Outlook & Advice** — Give actionable tips:
+- Recommended times to surf
+- Board type suggestions (shortboard, longboard, fish, etc.)
+- Skill level considerations (beginner-friendly? expert-only?)
+- Safety notes if conditions are dangerous
+
+Use a friendly, enthusiastic tone like a knowledgeable local surfer sharing the forecast with a friend. Keep it concise but informative (200-300 words max).
+
+Format your response as plain text with clear section headers using emojis."""
+
+        # Call OpenAI API
+        from openai import OpenAI
+        
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            logger.error("OPENAI_API_KEY not found in environment")
+            raise HTTPException(
+                status_code=500,
+                detail="OpenAI API key not configured"
+            )
+        
+        client = OpenAI(api_key=api_key)
+        
+        logger.info(f"Calling OpenAI for forecast interpretation...")
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Please analyze this surf forecast and provide a detailed summary:\n\n{forecast_context}"}
+            ],
+            temperature=0.7,
+            max_tokens=800
+        )
+        
+        ai_summary = response.choices[0].message.content
+        logger.info(f"AI forecast interpretation generated: {len(ai_summary)} characters")
+        
+        return ForecastInterpretResponse(
+            summary=ai_summary,
+            timestamp=datetime.utcnow().isoformat() + "Z"
+        )
+        
+    except HTTPException:
+        raise
+    
+    except Exception as e:
+        logger.error(f"Error in forecast interpret endpoint: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Forecast interpretation error: {str(e)}"
+        )
