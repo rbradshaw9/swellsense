@@ -130,14 +130,20 @@ Whether you're a beginner looking for gentle waves or an experienced surfer seek
    vercel --prod
    ```
 
-### Environment Variables in Vercel
+**Required Environment Variables in Vercel:**
 
 Set these in your Vercel project dashboard:
 
 **Required:**
-- `DATABASE_URL` - Your Neon PostgreSQL connection string
-- `SECRET_KEY` - JWT secret key for authentication
+- `DATABASE_URL` - Your Neon PostgreSQL connection string (already configured)
+- `SECRET_KEY` - JWT secret key for authentication (generate one below)
 - `NEXT_PUBLIC_API_URL` - Your API URL (will be auto-generated)
+
+**Generate a SECRET_KEY:**
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+```
+Copy the output and use it as your `SECRET_KEY` in Vercel.
 
 **Optional:**
 - `NOAA_API_KEY` - NOAA data access key (for future features)

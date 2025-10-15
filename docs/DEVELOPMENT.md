@@ -51,6 +51,12 @@ Copy the main `.env.example` to get started, then copy specific values to:
 - `backend/.env` - Backend configuration
 - `frontend/.env.local` - Frontend configuration
 
+**Generate a new SECRET_KEY (recommended for production):**
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+```
+Replace the SECRET_KEY in your `.env` files with the generated value.
+
 ## Development Commands
 
 **Backend:**
