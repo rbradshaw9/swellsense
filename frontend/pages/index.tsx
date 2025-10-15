@@ -1,51 +1,12 @@
 import type { NextPage } from 'next'
 import Head from 'next/head'
-import { useState, useEffect } from 'react'
-import { ChevronRightIcon, WavesIcon } from 'lucide-react'
-import ForecastCard from '../components/ForecastCard'
-import AIChat from '../components/AIChat'
-
-interface SurfCondition {
-  id: number;
-  timestamp: string;
-  wave_height: number | null;
-  wave_period: number | null;
-  wind_speed: number | null;
-  tide_level: number | null;
-  buoy_id: string | null;
-}
+import Link from 'next/link'
+import { useState } from 'react'
+import { ChevronRightIcon, WavesIcon, BarChart3, Sparkles, MapPin } from 'lucide-react'
 
 const Home: NextPage = () => {
   const [email, setEmail] = useState('')
   const [isSubmitted, setIsSubmitted] = useState(false)
-  const [forecastData, setForecastData] = useState<SurfCondition | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  // Fetch forecast data on mount
-  useEffect(() => {
-    const fetchForecast = async () => {
-      try {
-        // Use environment variable for API URL, fallback to localhost
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-        const response = await fetch(`${apiUrl}/api/forecast/latest`)
-        const result = await response.json()
-        
-        if (result.status === 'success' && result.data) {
-          setForecastData(result.data)
-        }
-      } catch (error) {
-        console.error('Error fetching forecast:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchForecast()
-    
-    // Refresh every 5 minutes
-    const interval = setInterval(fetchForecast, 5 * 60 * 1000)
-    return () => clearInterval(interval)
-  }, [])
 
   const handleEmailSignup = (e: React.FormEvent) => {
     e.preventDefault()
@@ -71,23 +32,6 @@ const Home: NextPage = () => {
       </Head>
 
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50">
-        {/* Navigation */}
-        <nav className="relative px-6 py-4">
-          <div className="mx-auto flex max-w-7xl items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <WavesIcon className="h-8 w-8 text-blue-600" />
-              <span className="text-2xl font-bold text-gray-900">SwellSense</span>
-            </div>
-            <div className="hidden md:flex items-center space-x-6">
-              <a href="#features" className="text-gray-600 hover:text-gray-900">Features</a>
-              <a href="#about" className="text-gray-600 hover:text-gray-900">About</a>
-              <button className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 transition-colors">
-                Get Early Access
-              </button>
-            </div>
-          </div>
-        </nav>
-
         {/* Hero Section */}
         <main className="relative px-6 pt-16 pb-20 sm:pt-24 sm:pb-32">
           <div className="mx-auto max-w-4xl text-center">
@@ -109,8 +53,29 @@ const Home: NextPage = () => {
               and tide information to tell you exactly when and where to surf.
             </p>
 
+            {/* CTA Buttons */}
+            <div className="mt-12 flex flex-col sm:flex-row gap-4 justify-center">
+              <Link
+                href="/forecast"
+                className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-8 py-4 text-lg font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors shadow-lg hover:shadow-xl"
+              >
+                View Live Forecast
+                <ChevronRightIcon className="ml-2 h-5 w-5" />
+              </Link>
+              <Link
+                href="/ai"
+                className="inline-flex items-center justify-center rounded-lg border-2 border-blue-600 bg-white px-8 py-4 text-lg font-medium text-blue-600 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+              >
+                Try AI Assistant
+                <Sparkles className="ml-2 h-5 w-5" />
+              </Link>
+            </div>
+
             {/* Email Signup */}
-            <div className="mt-12 max-w-md mx-auto">
+            <div className="mt-16 max-w-md mx-auto">
+              <p className="text-sm font-medium text-gray-700 mb-4">
+                Join the waitlist for early access
+              </p>
               <form onSubmit={handleEmailSignup} className="flex flex-col sm:flex-row gap-3">
                 <div className="flex-1">
                   <input
@@ -125,77 +90,94 @@ const Home: NextPage = () => {
                 <button
                   type="submit"
                   disabled={isSubmitted}
-                  className="inline-flex items-center rounded-lg bg-blue-600 px-6 py-3 text-white font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:bg-green-500"
+                  className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-6 py-3 text-white font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:bg-green-500"
                 >
-                  {isSubmitted ? (
-                    'Thanks! 🤙'
-                  ) : (
-                    <>
-                      Get Early Access
-                      <ChevronRightIcon className="ml-2 h-4 w-4" />
-                    </>
-                  )}
+                  {isSubmitted ? 'Thanks! 🤙' : 'Get Early Access'}
                 </button>
               </form>
               <p className="mt-3 text-sm text-gray-500">
                 Join the waitlist for early access. No spam, just waves. 🏄‍♂️
               </p>
             </div>
+          </div>
 
-            {/* Features Preview */}
-            <div className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="text-center">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-blue-100 text-blue-600 mb-4">
-                  📊
+          {/* Value Props */}
+          <div className="mx-auto max-w-6xl mt-32">
+            <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
+              Why SwellSense?
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {/* Real-Time Data */}
+              <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                <div className="inline-flex items-center justify-center w-14 h-14 rounded-lg bg-blue-100 text-blue-600 mb-6">
+                  <BarChart3 className="w-7 h-7" />
                 </div>
-                <h3 className="font-semibold text-gray-900 mb-2">Real-Time Data</h3>
-                <p className="text-gray-600 text-sm">
-                  Live buoy readings, wind data, and tide information
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">Real-Time Data</h3>
+                <p className="text-gray-600">
+                  Live buoy readings, wind data, and tide information updated every 3 hours from NOAA stations.
                 </p>
               </div>
-              <div className="text-center">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-blue-100 text-blue-600 mb-4">
-                  🤖
+
+              {/* AI Predictions */}
+              <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                <div className="inline-flex items-center justify-center w-14 h-14 rounded-lg bg-blue-100 text-blue-600 mb-6">
+                  <Sparkles className="w-7 h-7" />
                 </div>
-                <h3 className="font-semibold text-gray-900 mb-2">AI Predictions</h3>
-                <p className="text-gray-600 text-sm">
-                  Machine learning models trained on surf conditions
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">AI-Powered Insights</h3>
+                <p className="text-gray-600">
+                  Get intelligent surf recommendations and natural language explanations of conditions.
                 </p>
               </div>
-              <div className="text-center">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-blue-100 text-blue-600 mb-4">
-                  📍
+
+              {/* Local Focus */}
+              <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                <div className="inline-flex items-center justify-center w-14 h-14 rounded-lg bg-blue-100 text-blue-600 mb-6">
+                  <MapPin className="w-7 h-7" />
                 </div>
-                <h3 className="font-semibold text-gray-900 mb-2">Local Focus</h3>
-                <p className="text-gray-600 text-sm">
-                  Personalized forecasts for your favorite breaks
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">Your Favorite Breaks</h3>
+                <p className="text-gray-600">
+                  Personalized forecasts tuned to your local surf spots and skill level.
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Forecast and AI Section */}
-          <div className="mx-auto max-w-6xl mt-20 px-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Live Forecast Card */}
-              <ForecastCard data={forecastData} loading={loading} />
-              
-              {/* AI Chat Placeholder */}
-              <AIChat />
+          {/* Social Proof / Stats */}
+          <div className="mx-auto max-w-4xl mt-32 text-center">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
+              <div>
+                <div className="text-4xl font-bold text-blue-600">10+</div>
+                <div className="mt-2 text-sm text-gray-600">Buoy Stations</div>
+              </div>
+              <div>
+                <div className="text-4xl font-bold text-blue-600">24/7</div>
+                <div className="mt-2 text-sm text-gray-600">Real-Time Updates</div>
+              </div>
+              <div>
+                <div className="text-4xl font-bold text-blue-600">AI</div>
+                <div className="mt-2 text-sm text-gray-600">Powered Insights</div>
+              </div>
             </div>
           </div>
         </main>
 
         {/* Footer */}
         <footer className="border-t border-gray-200 bg-white mt-20">
-          <div className="mx-auto max-w-7xl px-6 py-8">
+          <div className="mx-auto max-w-7xl px-6 py-12">
             <div className="flex flex-col md:flex-row items-center justify-between">
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 mb-4 md:mb-0">
                 <WavesIcon className="h-6 w-6 text-blue-600" />
                 <span className="font-medium text-gray-900">SwellSense</span>
               </div>
+              <div className="flex items-center space-x-6 text-sm text-gray-600">
+                <Link href="/forecast" className="hover:text-gray-900">Forecast</Link>
+                <Link href="/ai" className="hover:text-gray-900">AI Chat</Link>
+                <a href="https://github.com/rbradshaw9/swellsense" className="hover:text-gray-900" target="_blank" rel="noopener noreferrer">
+                  GitHub
+                </a>
+              </div>
               <p className="mt-4 md:mt-0 text-sm text-gray-500">
-                Built for surfers, by surfers. Coming soon. 🌊
+                Built for surfers, by surfers. 🌊
               </p>
             </div>
           </div>
