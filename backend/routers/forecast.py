@@ -38,7 +38,7 @@ from utils.api_clients import (
 
 # Global forecast models
 from utils.fetch_noaa_erddap import fetch_noaa_erddap, health_check_noaa_erddap  # Stable THREDDS endpoint
-from utils.fetch_noaa_gfs import fetch_noaa_gfs, health_check_noaa_gfs  # WaveWatch III GRIB2
+from utils.fetch_noaa_gfs import fetch_noaa_gfs, health_check_noaa_gfs  # WaveWatch III via GribStream API
 from utils.fetch_era5 import fetch_era5, health_check_era5
 from utils.fetch_openmeteo import fetch_openmeteo, health_check_openmeteo  # Free, reliable backup
 from utils.fetch_copernicus import fetch_copernicus, health_check_copernicus  # Ocean currents + temp
