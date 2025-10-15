@@ -37,12 +37,14 @@ async def fetch_noaa_gfs(lat: float, lon: float) -> Optional[Dict[str, Any]]:
     Uses NOMADS GRIB2 filtering to extract data for a small region around the coordinates.
     Provides global coverage with ~30km resolution.
     
+    Implements robust fallback across multiple cycles and forecast hours.
+    
     Args:
         lat: Latitude
         lon: Longitude
     
     Returns:
-        Dict with wave height, period, wind speed, or None on failure
+        Dict with wave height, period, wind speed, model_cycle, forecast_hour, or error message
     """
     start_time = datetime.utcnow()
     cache_key = _get_cache_key(lat, lon)
@@ -55,34 +57,41 @@ async def fetch_noaa_gfs(lat: float, lon: float) -> Optional[Dict[str, Any]]:
             logger.info(f"NOAA GFS cache hit (age: {cache_age:.0f}s)")
             return cached["data"]
     
-    try:
-        # Get current forecast cycle (00z, 06z, 12z, 18z)
-        now = datetime.utcnow()
-        cycle_hour = (now.hour // 6) * 6
-        cycle_time = now.replace(hour=cycle_hour, minute=0, second=0, microsecond=0)
-        
-        # If within 3 hours of cycle time, use previous cycle (data may not be ready)
-        if (now - cycle_time).total_seconds() < 10800:
-            cycle_time = cycle_time - timedelta(hours=6)
-        
-        # Format cycle time
+    # Define region (1-degree box around point)
+    leftlon = max(-180, lon - 1)
+    rightlon = min(180, lon + 1)
+    toplat = min(90, lat + 1)
+    bottomlat = max(-90, lat - 1)
+    
+    # Normalize longitude to 0-360 for NOAA
+    if leftlon < 0:
+        leftlon += 360
+    if rightlon < 0:
+        rightlon += 360
+    
+    # Robust fallback strategy:
+    # Try cycles: today's 18z, 12z, 06z, 00z, then yesterday's 18z
+    # For each cycle, try forecast hours: 0, 3, 6, 9, 12, 18, 24
+    now = datetime.utcnow()
+    
+    # Build list of cycles to try (most recent first)
+    cycles_to_try = []
+    for hours_back in [0, 6, 12, 18, 24, 30]:  # Today and yesterday
+        test_time = now - timedelta(hours=hours_back)
+        cycle_hour = (test_time.hour // 6) * 6
+        cycle_time = test_time.replace(hour=cycle_hour, minute=0, second=0, microsecond=0)
+        if cycle_time not in cycles_to_try:
+            cycles_to_try.append(cycle_time)
+    
+    # Forecast hours to try for each cycle
+    forecast_hours = ["000", "003", "006", "009", "012", "018", "024"]
+    
+    # Try each combination
+    for cycle_time in cycles_to_try:
         cycle_str = cycle_time.strftime("%Y%m%d")
         hour_str = cycle_time.strftime("%H")
         
-        # Define region (1-degree box around point)
-        leftlon = max(-180, lon - 1)
-        rightlon = min(180, lon + 1)
-        toplat = min(90, lat + 1)
-        bottomlat = max(-90, lat - 1)
-        
-        # Normalize longitude to 0-360 for NOAA
-        if leftlon < 0:
-            leftlon += 360
-        if rightlon < 0:
-            rightlon += 360
-        
-        # Try multiple forecast hours (000, 003, 006)
-        for forecast_hour in ["000", "003", "006"]:
+        for forecast_hour in forecast_hours:
             try:
                 # Build GRIB2 filter URL
                 params = {
@@ -103,12 +112,18 @@ async def fetch_noaa_gfs(lat: float, lon: float) -> Optional[Dict[str, Any]]:
                 # Download GRIB2 file
                 async with httpx.AsyncClient(timeout=GFS_TIMEOUT) as client:
                     response = await client.get(WAVEWATCH_BASE_URL, params=params)
+                    
+                    # Handle HTTP errors (500, 404, etc.)
+                    if response.status_code in [404, 500]:
+                        logger.debug(f"NOAA GFS HTTP {response.status_code} for cycle {hour_str}z hour {forecast_hour}")
+                        continue
+                    
                     response.raise_for_status()
                     
                     # Check if we got actual GRIB2 data
                     content_type = response.headers.get('content-type', '')
                     if 'text/html' in content_type or len(response.content) < 100:
-                        logger.warning(f"NOAA GFS: Invalid response for hour {forecast_hour}")
+                        logger.debug(f"NOAA GFS: Invalid response for cycle {hour_str}z hour {forecast_hour}")
                         continue
                     
                     # Save to temporary file
@@ -154,7 +169,7 @@ async def fetch_noaa_gfs(lat: float, lon: float) -> Optional[Dict[str, Any]]:
                         await asyncio.to_thread(os.unlink, temp_path)
                         
                         duration = (datetime.utcnow() - start_time).total_seconds()
-                        logger.info(f"NOAA GFS success in {duration:.2f}s (forecast hour: {forecast_hour}, wave_height={wave_height:.2f}m)")
+                        logger.info(f"NOAA GFS success in {duration:.2f}s (cycle: {hour_str}z, hour: {forecast_hour}, wave: {wave_height:.2f}m)")
                         
                         result = {
                             "source": "noaa_gfs",
@@ -164,6 +179,7 @@ async def fetch_noaa_gfs(lat: float, lon: float) -> Optional[Dict[str, Any]]:
                             "wind_speed_ms": round(wind_speed, 2) if wind_speed is not None else None,
                             "wind_direction_deg": None,  # Not directly available in WaveWatch III
                             "timestamp": (cycle_time + timedelta(hours=int(forecast_hour))).isoformat() + "Z",
+                            "model_cycle": f"{hour_str}z",
                             "forecast_hour": forecast_hour,
                             "available": True
                         }
@@ -182,28 +198,30 @@ async def fetch_noaa_gfs(lat: float, lon: float) -> Optional[Dict[str, Any]]:
                             await asyncio.to_thread(os.unlink, temp_path)
                         except:
                             pass
-                        logger.error(f"NOAA GFS parse error for hour {forecast_hour}: {parse_error}")
+                        logger.debug(f"NOAA GFS parse error for cycle {hour_str}z hour {forecast_hour}: {parse_error}")
                         continue
                         
             except httpx.TimeoutException:
-                logger.warning(f"NOAA GFS timeout for forecast hour {forecast_hour}")
+                logger.debug(f"NOAA GFS timeout for cycle {hour_str}z hour {forecast_hour}")
                 continue
             except httpx.HTTPStatusError as e:
-                logger.warning(f"NOAA GFS HTTP error {e.response.status_code} for hour {forecast_hour}")
+                if e.response.status_code not in [404, 500]:  # Already handled above
+                    logger.debug(f"NOAA GFS HTTP {e.response.status_code} for cycle {hour_str}z hour {forecast_hour}")
                 continue
             except Exception as e:
-                logger.error(f"NOAA GFS error for hour {forecast_hour}: {str(e)}")
+                logger.debug(f"NOAA GFS error for cycle {hour_str}z hour {forecast_hour}: {str(e)}")
                 continue
-        
-        # All forecast hours failed
-        duration = (datetime.utcnow() - start_time).total_seconds()
-        logger.error(f"NOAA GFS all forecast hours failed after {duration:.2f}s")
-        return None
-        
-    except Exception as e:
-        duration = (datetime.utcnow() - start_time).total_seconds()
-        logger.error(f"NOAA GFS error after {duration:.2f}s: {str(e)}")
-        return None
+    
+    # All combinations failed
+    duration = (datetime.utcnow() - start_time).total_seconds()
+    logger.error(f"NOAA GFS: All cycles/forecast hours failed after {duration:.2f}s")
+    
+    return {
+        "source": "noaa_gfs",
+        "error": "No data available from NOMADS",
+        "available": False,
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
 
 
 # Alias for WaveWatch III compatibility
