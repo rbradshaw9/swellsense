@@ -17,6 +17,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from database import get_db, SurfCondition, BuoyStation
 from utils.buoy_utils import get_buoy_by_location, get_default_buoy
+from utils.forecast_utils import fetch_global_forecast_context, format_forecast_for_ai
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -199,6 +200,95 @@ Be friendly, enthusiastic, and use surf terminology appropriately. If conditions
 """
 
 
+def build_enhanced_ai_prompt(query: str, forecast_text: str, forecast_context: dict, skill_level: str = "intermediate") -> str:
+    """
+    Build enhanced AI prompt with multi-source global forecast context
+    
+    Args:
+        query: User's question
+        forecast_text: Formatted forecast string
+        forecast_context: Raw forecast context data
+        skill_level: User's skill level
+    
+    Returns:
+        Formatted prompt string for GPT-4
+    """
+    skill_context = {
+        "beginner": "Prioritize safety. Recommend waves 0.5-1.5m, light winds (< 10kts), minimal current. Avoid crowded breaks.",
+        "intermediate": "Can handle 1-2.5m waves, moderate winds (10-15kts), some current. Suggest timing for best conditions.",
+        "advanced": "Comfortable in challenging conditions: 2m+ waves, strong winds (15-20kts), currents. Focus on peak performance windows."
+    }
+    
+    # Add tide-specific guidance
+    tide_guidance = ""
+    if forecast_context.get("tide_trend"):
+        tide_guidance = f"\n🌊 TIDE STRATEGY: Tide is {forecast_context['tide_trend']}."
+        if forecast_context.get("next_tide"):
+            tide_guidance += f" Next {forecast_context['next_tide']['type'].lower()} tide at {forecast_context['next_tide']['time']}."
+        tide_guidance += " Consider how tide affects local break characteristics."
+    
+    # Add wind quality guidance
+    wind_guidance = ""
+    if forecast_context.get("wind_quality"):
+        wind_guidance = f"\n💨 WIND ANALYSIS: Current wind is {forecast_context['wind_quality']}. "
+        if "offshore" in forecast_context['wind_quality'].lower():
+            wind_guidance += "Clean, groomed wave faces expected."
+        elif "onshore" in forecast_context['wind_quality'].lower():
+            wind_guidance += "Choppy conditions, reduced wave quality."
+    
+    prompt = f"""
+You are SurfGPT, an expert surf forecasting AI with access to real-time global ocean and weather data from multiple sources (NOAA, StormGlass, Met.no, OpenWeatherMap, WorldTides).
+
+USER QUERY: "{query}"
+
+SKILL LEVEL: {skill_level.upper()}
+{skill_context.get(skill_level, skill_context["intermediate"])}
+
+{forecast_text}
+{tide_guidance}
+{wind_guidance}
+
+ANALYSIS FRAMEWORK:
+1. Wave Quality: Consider swell period (>8s = good energy), height, and direction
+2. Wind Impact: Offshore = clean, onshore = choppy, cross-shore = variable
+3. Tide Timing: Rising/falling tides affect different breaks differently
+4. Safety: Match conditions to skill level
+5. Timing: Recommend specific windows if tide/wind patterns favor certain times
+
+Provide your response in JSON format:
+{{
+  "recommendation": "Clear 1-2 sentence surf recommendation",
+  "confidence": 0.XX (0-1 score based on data quality and conditions clarity),
+  "explanation": "Detailed 2-3 sentence analysis covering wave quality, wind, tide, and timing recommendations"
+}}
+
+Be specific about timing, location considerations, and why conditions are good/bad for the user's skill level.
+"""
+    
+    return prompt
+
+
+def format_legacy_data(surf_data: dict) -> str:
+    """Format legacy NOAA surf data for AI context"""
+    if surf_data["status"] == "no_data":
+        return "⚠️ No surf data available for analysis."
+    
+    current = surf_data.get("current", {})
+    trends = surf_data.get("trends_24h", {})
+    
+    return f"""
+📊 CURRENT CONDITIONS (NOAA Buoy):
+  • Wave Height: {current.get('wave_height_m')}m
+  • Wave Period: {current.get('wave_period_sec')}s
+  • Wind Speed: {current.get('wind_speed_ms')}m/s
+  • Timestamp: {current.get('timestamp')}
+
+📈 24-HOUR TRENDS:
+  • Avg Wave Height: {trends.get('avg_wave_height_m')}m
+  • Avg Wind Speed: {trends.get('avg_wind_speed_ms')}m/s
+"""
+
+
 async def call_openai_api(prompt: str) -> dict:
     """
     Call OpenAI API with the constructed prompt
@@ -294,38 +384,57 @@ async def ai_query(
     try:
         logger.info(f"AI Query received: {query.query} (skill: {query.skill_level}, location: {query.location})")
         
-        # Step 1: Determine which buoy to use based on location
+        # Step 1: Determine location coordinates
+        lat, lon = None, None
         buoy = None
-        if query.location or (query.latitude and query.longitude):
-            buoy = await get_buoy_by_location(
-                db,
-                location=query.location,
-                latitude=query.latitude,
-                longitude=query.longitude
-            )
-            if buoy:
-                logger.info(f"Selected buoy: {buoy.station_id} ({buoy.name}) in {buoy.region}")
-            else:
-                logger.warning(f"No buoy found for location: {query.location or f'({query.latitude}, {query.longitude})'}")
         
-        # Fallback to default buoy if no location match
-        if not buoy:
+        if query.latitude and query.longitude:
+            # Use provided coordinates
+            lat, lon = query.latitude, query.longitude
+            logger.info(f"Using provided coordinates: ({lat}, {lon})")
+        elif query.location:
+            # Try to find buoy by location string
+            buoy = await get_buoy_by_location(db, location=query.location)
+            if buoy:
+                lat, lon = buoy.latitude, buoy.longitude
+                logger.info(f"Found buoy {buoy.station_id} at ({lat}, {lon}) for location: {query.location}")
+        
+        # Fallback to default buoy
+        if not lat or not lon:
             buoy = await get_default_buoy(db)
             if buoy:
-                logger.info(f"Using default buoy: {buoy.station_id} ({buoy.name})")
+                lat, lon = buoy.latitude, buoy.longitude
+                logger.info(f"Using default buoy: {buoy.station_id} at ({lat}, {lon})")
+            else:
+                raise HTTPException(
+                    status_code=404,
+                    detail="No location specified and no default buoy available"
+                )
         
-        # Step 2: Fetch recent surf data from selected buoy
-        buoy_id = buoy.station_id if buoy else None
-        surf_data = await fetch_recent_surf_data(db, buoy_id=buoy_id, hours=24)
+        # Step 2: Fetch comprehensive global forecast data
+        forecast_context = await fetch_global_forecast_context(db, lat, lon, hours=24)
         
-        # Step 3: Build AI prompt with context
-        prompt = build_ai_prompt(query.query, surf_data, query.skill_level)
+        if forecast_context.get("status") != "success":
+            # Fallback to old NOAA-only data if global forecast fails
+            logger.warning(f"Global forecast unavailable, falling back to NOAA data")
+            buoy_id = buoy.station_id if buoy else None
+            surf_data = await fetch_recent_surf_data(db, buoy_id=buoy_id, hours=24)
+            forecast_text = format_legacy_data(surf_data)
+        else:
+            # Format global forecast for AI
+            forecast_text = format_forecast_for_ai(forecast_context)
+            logger.info(f"Using global forecast with {len(forecast_context.get('data_sources', []))} sources")
+        
+        # Step 3: Build enhanced AI prompt with multi-source context
+        prompt = build_enhanced_ai_prompt(query.query, forecast_text, forecast_context, query.skill_level)
         
         # Step 4: Call OpenAI API
         ai_response = await call_openai_api(prompt)
         
         # Step 5: Format and return response
-        data_timestamp = surf_data.get("current", {}).get("timestamp") if surf_data["status"] == "success" else None
+        data_timestamp = forecast_context.get("timestamp") if forecast_context.get("status") == "success" else None
+        station_used = forecast_context.get("nearest_buoy") or (buoy.station_id if buoy else None)
+        region = forecast_context.get("location") or (buoy.region if buoy else None)
         
         response = AIResponse(
             query=query.query,
@@ -333,11 +442,11 @@ async def ai_query(
             confidence=ai_response["confidence"],
             explanation=ai_response["explanation"],
             data_timestamp=data_timestamp,
-            station_used=buoy.station_id if buoy else None,
-            region=buoy.region if buoy else None
+            station_used=station_used,
+            region=region
         )
         
-        logger.info(f"AI response generated with confidence: {response.confidence} (buoy: {response.station_used})")
+        logger.info(f"AI response generated with confidence: {response.confidence} (station: {response.station_used})")
         
         return response
         
