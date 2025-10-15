@@ -1,7 +1,8 @@
 import type { NextPage } from 'next'
 import Head from 'next/head'
 import { useState, useEffect } from 'react'
-import { WavesIcon, RefreshCw, Calendar, AlertTriangle } from 'lucide-react'
+import dynamic from 'next/dynamic'
+import { WavesIcon, RefreshCw, Calendar, AlertTriangle, MapPin, Navigation } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '../utils/api'
 import WaveHeightChart from '../components/charts/WaveHeightChart'
@@ -9,6 +10,19 @@ import TideChart from '../components/charts/TideChart'
 import WindCompass from '../components/charts/WindCompass'
 import DataCard from '../components/charts/DataCard'
 import ErrorBoundary from '../components/ErrorBoundary'
+
+// Dynamic import for MapPR (client-side only due to Leaflet)
+const MapPR = dynamic(() => import('../components/MapPR'), { 
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-[450px] bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200 flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p className="text-gray-600">Loading map...</p>
+      </div>
+    </div>
+  )
+})
 
 interface SurfCondition {
   id: number;
@@ -26,6 +40,8 @@ const Forecast: NextPage = () => {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedSpot, setSelectedSpot] = useState<{ name: string; lat: number; lon: number } | null>(null)
+  const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null)
 
   // Mock data for charts - replace with real API data later
   const generateMockWaveData = () => {
@@ -70,11 +86,15 @@ const Forecast: NextPage = () => {
     return data
   }
 
-  const fetchForecast = async () => {
+  const fetchForecast = async (lat?: number, lon?: number) => {
     try {
       setRefreshing(true)
       setError(null)
-      const result = await api.fetchLatestForecast()
+      
+      // If lat/lon provided, use global forecast API, otherwise use latest forecast
+      const result = lat && lon 
+        ? await api.fetchGlobalForecast(lat, lon, 24)
+        : await api.fetchLatestForecast()
       
       if (result.status === 'success' && result.data) {
         setForecastData(result.data)
@@ -94,6 +114,36 @@ const Forecast: NextPage = () => {
       setLoading(false)
       setRefreshing(false)
     }
+  }
+
+  const handleSpotSelect = (spot: { name: string; lat: number; lon: number }) => {
+    setSelectedSpot(spot)
+    fetchForecast(spot.lat, spot.lon)
+    toast.success(`Loading forecast for ${spot.name}`)
+  }
+
+  const handleUseMyLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error('Geolocation is not supported by your browser')
+      return
+    }
+
+    toast.loading('Getting your location...')
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords
+        setUserLocation({ lat: latitude, lon: longitude })
+        setSelectedSpot({ name: 'Your Location', lat: latitude, lon: longitude })
+        fetchForecast(latitude, longitude)
+        toast.dismiss()
+        toast.success('Using your current location')
+      },
+      (error) => {
+        toast.dismiss()
+        toast.error('Unable to get your location')
+        console.error('Geolocation error:', error)
+      }
+    )
   }
 
   // Fetch forecast data on mount
@@ -138,24 +188,47 @@ const Forecast: NextPage = () => {
         <div className="mx-auto max-w-7xl px-6 py-12">
           {/* Header */}
           <div className="mb-12">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
               <div className="flex items-center space-x-3">
                 <div className="p-3 bg-gradient-ocean rounded-xl shadow-lg">
                   <WavesIcon className="w-8 h-8 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-4xl font-bold text-gray-900">Live Surf Forecast</h1>
-                  <p className="text-sm text-gray-600 mt-1">Real-time conditions from NOAA buoys</p>
+                  <h1 className="text-4xl font-bold text-gray-900">
+                    {selectedSpot ? (
+                      <span className="flex items-center gap-2">
+                        <MapPin className="w-8 h-8 text-blue-600" />
+                        {selectedSpot.name}
+                      </span>
+                    ) : (
+                      'Live Surf Forecast'
+                    )}
+                  </h1>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {selectedSpot 
+                      ? `${selectedSpot.lat.toFixed(4)}°N, ${Math.abs(selectedSpot.lon).toFixed(4)}°W`
+                      : 'Real-time conditions from NOAA buoys'
+                    }
+                  </p>
                 </div>
               </div>
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="inline-flex items-center px-4 py-2 rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors disabled:opacity-50"
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                Refresh Forecast
-              </button>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={handleUseMyLocation}
+                  className="inline-flex items-center px-4 py-2 rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                >
+                  <Navigation className="w-4 h-4 mr-2" />
+                  My Location
+                </button>
+                <button
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  className="inline-flex items-center px-4 py-2 rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+              </div>
             </div>
 
             {/* Last Update */}
@@ -180,6 +253,15 @@ const Forecast: NextPage = () => {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Interactive Surf Spot Map */}
+          <div className="mb-12">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-semibold text-gray-900">Puerto Rico Surf Spots</h2>
+              <p className="text-sm text-gray-600">Click a marker to view forecast</p>
+            </div>
+            <MapPR onSpotSelect={handleSpotSelect} selectedSpot={selectedSpot} />
           </div>
 
           {/* Wrap main content in ErrorBoundary */}

@@ -1,0 +1,98 @@
+[
+  {
+    "id": 1,
+    "name": "Rincón - Domes",
+    "lat": 18.3433,
+    "lon": -67.2625,
+    "description": "World-class right point break, best in winter",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": 2,
+    "name": "Rincón - Tres Palmas",
+    "lat": 18.3528,
+    "lon": -67.2608,
+    "description": "Heavy reef break, big wave spot",
+    "difficulty": "advanced"
+  },
+  {
+    "id": 3,
+    "name": "Rincón - Maria's",
+    "lat": 18.3381,
+    "lon": -67.2583,
+    "description": "Popular beach break with consistent waves",
+    "difficulty": "beginner"
+  },
+  {
+    "id": 4,
+    "name": "Isabela - Jobos Beach",
+    "lat": 18.5039,
+    "lon": -67.0625,
+    "description": "Consistent beach break, great for learning",
+    "difficulty": "beginner"
+  },
+  {
+    "id": 5,
+    "name": "Isabela - Middles",
+    "lat": 18.5122,
+    "lon": -67.0531,
+    "description": "Offshore reef break with long rides",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": 6,
+    "name": "Isabela - Shacks",
+    "lat": 18.5156,
+    "lon": -67.0447,
+    "description": "Hollow reef break, barreling waves",
+    "difficulty": "advanced"
+  },
+  {
+    "id": 7,
+    "name": "Aguadilla - Crash Boat",
+    "lat": 18.4589,
+    "lon": -67.1672,
+    "description": "Popular beach with pier, good for all levels",
+    "difficulty": "beginner"
+  },
+  {
+    "id": 8,
+    "name": "Aguadilla - Gas Chambers",
+    "lat": 18.4711,
+    "lon": -67.1558,
+    "description": "Powerful reef break, expert only",
+    "difficulty": "advanced"
+  },
+  {
+    "id": 9,
+    "name": "Aguadilla - Wilderness",
+    "lat": 18.4819,
+    "lon": -67.1464,
+    "description": "Remote beach break with strong currents",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": 10,
+    "name": "Arecibo - Los Tubos",
+    "lat": 18.4756,
+    "lon": -66.7147,
+    "description": "Tubular reef break, technical wave",
+    "difficulty": "advanced"
+  },
+  {
+    "id": 11,
+    "name": "San Juan - Pine Grove",
+    "lat": 18.4419,
+    "lon": -66.0439,
+    "description": "Urban beach break near metro area",
+    "difficulty": "beginner"
+  },
+  {
+    "id": 12,
+    "name": "Luquillo - La Pared",
+    "lat": 18.3725,
+    "lon": -65.7178,
+    "description": "East coast reef break, less crowded",
+    "difficulty": "intermediate"
+  }
+]
