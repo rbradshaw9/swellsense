@@ -45,7 +45,7 @@ def _get_cache_key(lat: float, lon: float) -> str:
     return f"{lat_rounded},{lon_rounded}"
 
 
-async def fetch_era5(lat: float, lon: float) -> Optional[Dict[str, Any]]:
+async def fetch_era5(lat: float, lon: float, when: Optional[datetime] = None) -> Optional[Dict[str, Any]]:
     """
     Fetch atmospheric and ocean data from Copernicus ERA5 via CDS API
     
@@ -55,6 +55,7 @@ async def fetch_era5(lat: float, lon: float) -> Optional[Dict[str, Any]]:
     Args:
         lat: Latitude
         lon: Longitude
+        when: Optional datetime for historical data (defaults to 5 days ago for latest available)
     
     Returns:
         Dict with wave height, wind speed/direction, or None on failure
@@ -116,9 +117,13 @@ async def fetch_era5(lat: float, lon: float) -> Optional[Dict[str, Any]]:
             east = lon + 0.25
             
             # Get current UTC time (ERA5 has ~5 day delay for final data)
-            now = datetime.utcnow()
-            # Use data from 5 days ago to ensure availability
-            target_time = now - timedelta(days=5)
+            if when is not None:
+                # Use provided datetime
+                target_time = when
+            else:
+                # Use data from 5 days ago to ensure availability
+                now = datetime.utcnow()
+                target_time = now - timedelta(days=5)
             
             # Retrieve ERA5 reanalysis data
             c.retrieve(

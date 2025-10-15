@@ -206,6 +206,18 @@ async def fetch_noaa_gfs(lat: float, lon: float) -> Optional[Dict[str, Any]]:
         return None
 
 
+# Alias for WaveWatch III compatibility
+async def fetch_ww3(lat: float, lon: float) -> Optional[Dict[str, Any]]:
+    """Alias for fetch_noaa_gfs - WaveWatch III data fetcher"""
+    return await fetch_noaa_gfs(lat, lon)
+
+
+# Health check alias
+async def health_check_ww3() -> Dict[str, Any]:
+    """Alias for health_check_noaa_gfs"""
+    return await health_check_noaa_gfs()
+
+
 async def health_check_noaa_gfs() -> Dict[str, Any]:
     """
     Health check for NOAA GFS service
