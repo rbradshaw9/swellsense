@@ -25,10 +25,5 @@
     "NEXT_PUBLIC_API_URL": "@api_url",
     "DATABASE_URL": "@database_url",
     "SECRET_KEY": "@secret_key"
-  },
-  "functions": {
-    "backend/main.py": {
-      "runtime": "python3.9"
-    }
   }
 }
