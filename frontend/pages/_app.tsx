@@ -3,10 +3,11 @@ import type { AppProps } from 'next/app'
 import Head from 'next/head'
 import Navbar from '../components/Navbar'
 import { Toaster } from 'react-hot-toast'
+import { AuthProvider } from '../context/AuthContext'
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
-    <>
+    <AuthProvider>
       <Head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#0ea5e9" />
@@ -42,6 +43,6 @@ export default function App({ Component, pageProps }: AppProps) {
           },
         }}
       />
-    </>
+    </AuthProvider>
   )
 }

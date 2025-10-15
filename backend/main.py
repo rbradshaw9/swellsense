@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from database import init_db
-from routers import forecast, ai, status, chat
+from routers import forecast, ai, status, chat, user
 from scheduler import global_scheduler
 
 
@@ -44,6 +44,7 @@ app.include_router(status.router)
 app.include_router(forecast.router)
 app.include_router(ai.router)
 app.include_router(chat.router)
+app.include_router(user.router)
 
 # Configure CORS
 origins = [

@@ -1,10 +1,12 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { WavesIcon, BarChart3, MessageSquare } from 'lucide-react';
+import { WavesIcon, BarChart3, MessageSquare, User, LogIn } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const Navbar: React.FC = () => {
   const router = useRouter();
+  const { user, loading } = useAuth();
 
   const isActive = (path: string) => router.pathname === path;
 
@@ -54,11 +56,31 @@ const Navbar: React.FC = () => {
             </Link>
           </div>
 
-          {/* CTA Button */}
+          {/* Auth Section */}
           <div className="hidden md:block">
-            <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors">
-              Get Early Access
-            </button>
+            {loading ? (
+              <div className="w-24 h-10 bg-gray-100 rounded-lg animate-pulse" />
+            ) : user ? (
+              <Link
+                href="/account"
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors inline-flex items-center ${
+                  isActive('/account')
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <User className="w-4 h-4 mr-1.5" />
+                Account
+              </Link>
+            ) : (
+              <Link
+                href="/login"
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors inline-flex items-center"
+              >
+                <LogIn className="w-4 h-4 mr-1.5" />
+                Sign In
+              </Link>
+            )}
           </div>
         </div>
       </div>
