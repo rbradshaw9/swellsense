@@ -13,7 +13,7 @@ Uses asyncio.gather() for parallel execution
 import asyncio
 import logging
 from datetime import datetime
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 from database import init_db, BuoyStation, AsyncSessionLocal
 from sqlalchemy import select
