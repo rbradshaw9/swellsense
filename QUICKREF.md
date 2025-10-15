@@ -1,6 +1,23 @@
 # SwellSense Quick Reference
 
-## Project Structure Quick View
+## 🚀 Quick Start
+
+### AI Query (SurfGPT)
+```bash
+# Get AI surf recommendations
+curl -X POST http://localhost:8000/api/ai/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Should I surf today?", "skill_level": "intermediate"}'
+
+# Response:
+# {
+#   "query": "Should I surf today?",
+#   "recommendation": "Yes! Great conditions for intermediate surfers...",
+#   "confidence": 0.85,
+#   "explanation": "Current 3.3ft waves with 8.7s period and light 11mph winds...",
+#   "data_timestamp": "2025-10-15T15:40:00"
+# }
+```
 
 ```
 swellsense/

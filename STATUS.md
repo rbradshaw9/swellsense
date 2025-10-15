@@ -17,6 +17,13 @@ SwellSense is an AI-powered surf forecasting platform that combines real-time NO
   - `/api/forecast` - Paginated recent conditions
   - `/api/forecast/latest` - Most recent reading
   - `/api/forecast/stats` - Statistical analysis over time periods
+- ✅ AI Query Endpoint (SurfGPT Core)
+  - `/api/ai/query` - Intelligent surf recommendations
+  - OpenAI GPT-4o-mini integration
+  - Natural language query processing
+  - Real-time NOAA data context
+  - Skill-level personalization (beginner/intermediate/advanced)
+  - Structured JSON responses with confidence scores
 - ✅ NOAA NDBC data ingestion pipeline
   - Real-time buoy data fetching
   - Intelligent parsing of NOAA text format
@@ -64,18 +71,20 @@ SwellSense is an AI-powered surf forecasting platform that combines real-time NO
 - 🚧 Tide data integration
 - 🚧 Weather API integration (OpenWeatherMap)
 
-#### AI Features (v0.3 Target)
-- 📋 OpenAI GPT-4 integration
-- 📋 Natural language surf recommendations
-- 📋 Skill-based personalization
+#### AI Features (v0.3 - In Progress)
+- ✅ OpenAI GPT-4o-mini integration
+- ✅ Natural language surf recommendations
+- ✅ Skill-based personalization
 - 📋 "Best time to surf" predictions
+- 📋 Frontend ChatBox UI integration
 
 ### 📊 Technical Metrics
 
 **Backend Coverage:**
 - Database Models: 100%
-- API Endpoints: 3/5 planned (60%)
-- Data Sources: 1/3 integrated (33%)
+- API Endpoints: 4/5 planned (80%) ✨
+- Data Sources: 2/3 integrated (67%) ✨
+- AI Integration: Complete (OpenAI)
 - Error Handling: Comprehensive
 
 **Frontend Coverage:**

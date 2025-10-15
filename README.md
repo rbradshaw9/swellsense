@@ -260,6 +260,51 @@ Once the backend is running, access the interactive API documentation at:
   - `buoy_id` (str, optional): Filter by specific buoy station
 - Returns: Statistics including average, min, max wave height and wind speed
 
+#### AI Query Endpoint
+
+**POST /api/ai/query**
+- Get intelligent surf recommendations powered by OpenAI and real-time NOAA data
+- Request body:
+  ```json
+  {
+    "query": "Should I surf today?",
+    "skill_level": "intermediate",
+    "location": "optional"
+  }
+  ```
+- Parameters:
+  - `query` (string, required): Natural language question about surf conditions
+  - `skill_level` (string, optional): "beginner", "intermediate", or "advanced" (default: "intermediate")
+  - `location` (string, optional): Specific location for recommendations
+- Returns:
+  ```json
+  {
+    "query": "Should I surf today?",
+    "recommendation": "Yes! Conditions are ideal for intermediate surfers...",
+    "confidence": 0.85,
+    "explanation": "Based on current 3.3ft waves with 8.7s period and 11mph winds...",
+    "data_timestamp": "2025-10-15T15:40:00"
+  }
+  ```
+
+**Example Usage:**
+```bash
+curl -X POST http://localhost:8000/api/ai/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Where should I surf tomorrow?", "skill_level": "beginner"}'
+```
+
+**Environment Variables:**
+- `OPENAI_API_KEY`: Your OpenAI API key (get it at https://platform.openai.com/api-keys)
+- Required for AI-powered recommendations
+
+**How it works:**
+1. Fetches latest surf conditions from Neon database (wave height, period, wind speed)
+2. Analyzes 24-hour trends and data quality
+3. Builds contextual prompt with NOAA buoy data and user's skill level
+4. Sends prompt to OpenAI GPT-4o-mini for intelligent analysis
+5. Returns structured JSON with personalized surf recommendations
+
 ### NOAA Data Ingestion
 
 The project includes a background script to fetch and ingest real-time buoy data from NOAA:

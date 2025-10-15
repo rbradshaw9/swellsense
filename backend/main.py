@@ -3,9 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import uvicorn
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from database import init_db
-from routers import forecast
+from routers import forecast, ai
 
 
 @asynccontextmanager
@@ -30,6 +35,7 @@ app = FastAPI(
 
 # Include routers
 app.include_router(forecast.router)
+app.include_router(ai.router)
 
 # Configure CORS
 origins = [
