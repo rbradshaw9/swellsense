@@ -6,5 +6,11 @@
       "use": "@vercel/next"
     }
   ],
-  "outputDirectory": "frontend/.next"
+  "outputDirectory": "frontend/.next",
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "frontend/$1"
+    }
+  ]
 }
