@@ -1,5 +1,12 @@
 # SwellSense 🌊
 
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/rbradshaw9/swellsense)
+[![Deploy Status](https://img.shields.io/badge/deploy-vercel-blue)](https://swellsense.vercel.app)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Next.js](https://img.shields.io/badge/next.js-15.5-black.svg)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/typescript-5.9-blue.svg)](https://www.typescriptlang.org/)
+
 An AI-powered surf forecasting and assistant app that analyzes real-time data from buoys, tides, and wind patterns to predict optimal surf conditions for surfers worldwide.
 
 ## Overview
@@ -74,6 +81,12 @@ npm run dev
 - **OpenWeatherMap** - Weather forecasting and wind data
 - **Surfline API** - Additional surf condition data
 
+### ML/AI Architecture
+- **Model Training**: Machine learning models will be developed in `/backend/ai/`
+- **OpenAI Integration**: GPT-4 for natural language surf recommendations
+- **TensorFlow/Scikit-learn**: Predictive models for wave forecasting
+- **Future**: Custom neural networks for surf quality prediction
+
 ### Hosting & Infrastructure
 - **Vercel** - Frontend hosting and API routes
 - **Neon/Supabase** - PostgreSQL database hosting
@@ -110,11 +123,37 @@ npm run dev
 
 4. **Start the backend server**
    ```bash
+   # Development mode with auto-reload
+   uvicorn main:app --reload --host 0.0.0.0 --port 8000
+   
+   # Or run directly
    python main.py
-   # Or use: uvicorn main:app --reload
    ```
 
-   The API will be available at `http://localhost:8000`
+   The API will be available at:
+   - **API Root**: `http://localhost:8000`
+   - **Interactive Docs (Swagger)**: `http://localhost:8000/docs`
+   - **Alternative Docs (ReDoc)**: `http://localhost:8000/redoc`
+
+5. **Database Connection (Neon)**
+   
+   SwellSense uses Neon's serverless PostgreSQL. Your `DATABASE_URL` in `.env` should look like:
+   ```
+   postgresql://user:password@ep-xxx.region.aws.neon.tech/dbname?sslmode=require
+   ```
+   
+   The connection uses async SQLAlchemy with `asyncpg` driver for optimal performance.
+   SSL is automatically handled by the asyncpg driver.
+
+6. **Run NOAA Data Ingestion**
+   
+   Populate the database with real surf data:
+   ```bash
+   python scripts/ingest_noaa.py --buoy-id 41043
+   
+   # Schedule with cron (every 3 hours)
+   0 */3 * * * cd /path/to/backend && python scripts/ingest_noaa.py --buoy-id 41043
+   ```
 
 ### Frontend Setup
 
@@ -305,19 +344,27 @@ The next major update will focus on **real surf data and AI recommendations**:
 - [x] Vercel deployment configuration
 - [x] Environment setup and documentation
 
-### v0.2: Core Data & AI 🚧 (November 2025)
-- [ ] **NOAA Buoy Data Integration**
-  - Real-time wave height, period, direction
-  - Historical data analysis
-  - Buoy station mapping
-- [ ] **AI Surf Advisor**
-  - OpenAI integration for surf recommendations
-  - Natural language surf condition explanations
-  - Personalized advice based on skill level
-- [ ] **Basic Forecasting Engine**
-  - Combine NOAA data with tide information
-  - Generate surf quality scores (1-10)
-  - Simple prediction algorithms
+### v0.2: Core Data & AI 🚧 (In Progress - November 2025)
+- [x] **NOAA Buoy Data Integration**
+  - ✅ Real-time wave height, period, direction from NDBC
+  - ✅ Automated data ingestion script
+  - ✅ PostgreSQL storage with SQLAlchemy
+  - [ ] Historical data analysis
+  - [ ] Multiple buoy station support
+- [x] **Forecast API Endpoints**
+  - ✅ `/api/forecast` - Recent surf conditions
+  - ✅ `/api/forecast/latest` - Most recent reading
+  - ✅ `/api/forecast/stats` - Statistical summaries
+- [x] **Frontend Forecast Display**
+  - ✅ ForecastCard component with ocean-themed UI
+  - ✅ Real-time data fetching
+  - ✅ Wave height, period, wind speed display
+  - ✅ Surf quality indicator
+- [ ] **AI Surf Advisor** (Next Phase)
+  - [ ] OpenAI integration for surf recommendations
+  - [ ] Natural language surf condition explanations
+  - [ ] Personalized advice based on skill level
+  - ✅ Placeholder UI component added
 
 ### v0.3: Enhanced Features (Q1 2026)
 - [ ] User authentication and profiles
