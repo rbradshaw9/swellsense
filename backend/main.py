@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from database import init_db
-from routers import forecast, ai
+from routers import forecast, ai, status
 
 
 @asynccontextmanager
@@ -34,6 +34,7 @@ app = FastAPI(
 )
 
 # Include routers
+app.include_router(status.router)
 app.include_router(forecast.router)
 app.include_router(ai.router)
 
