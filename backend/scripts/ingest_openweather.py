@@ -11,7 +11,7 @@ import asyncio
 import httpx
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Optional
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -58,7 +58,9 @@ class OpenWeatherIngester:
         
         for item in data['list'][:40]:  # 5 days of 3-hour forecasts
             try:
-                timestamp = datetime.fromtimestamp(item['dt'])
+                timestamp = datetime.fromtimestamp(item['dt'], tz=timezone.utc)
+                # Normalize to offset-naive UTC for PostgreSQL
+                timestamp = timestamp.replace(tzinfo=None)
                 
                 wind = item.get('wind', {})
                 main = item.get('main', {})

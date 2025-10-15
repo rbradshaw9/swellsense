@@ -11,7 +11,7 @@ import asyncio
 import httpx
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -65,7 +65,9 @@ class WorldTidesIngester:
         # Parse extremes (high/low tides)
         for extreme in data.get('extremes', []):
             try:
-                timestamp = datetime.fromtimestamp(extreme['dt'])
+                timestamp = datetime.fromtimestamp(extreme['dt'], tz=timezone.utc)
+                # Normalize to offset-naive UTC for PostgreSQL
+                timestamp = timestamp.replace(tzinfo=None)
                 
                 condition = {
                     'source': 'worldtides',

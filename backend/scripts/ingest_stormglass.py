@@ -11,7 +11,7 @@ import asyncio
 import httpx
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -63,6 +63,9 @@ class StormGlassIngester:
         for hour in data['hours'][:24]:  # Next 24 hours
             try:
                 timestamp = datetime.fromisoformat(hour['time'].replace('Z', '+00:00'))
+                # Normalize to UTC with tzinfo=None (offset-naive) for PostgreSQL
+                if timestamp.tzinfo:
+                    timestamp = timestamp.astimezone(timezone.utc).replace(tzinfo=None)
                 
                 # Get first available source value
                 def get_value(field: str) -> Optional[float]:

@@ -1,18 +1,22 @@
 """
 NOAA GFS (Global Forecast System) / WaveWatch III Integration
-Provides global wave and wind forecasts using NOAA's open data
+Provides global wave and wind forecasts using NOAA's NOMADS GRIB2 data
+
+Uses cfgrib/xarray for robust GRIB2 parsing
 """
+import os
 import httpx
 import logging
+import tempfile
+import asyncio
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
-import asyncio
 
 logger = logging.getLogger(__name__)
 
 # NOAA NOMADS GFS/WaveWatch III endpoints
 WAVEWATCH_BASE_URL = "https://nomads.ncep.noaa.gov/cgi-bin/filter_wave_multi.pl"
-GFS_TIMEOUT = 8.0  # seconds
+GFS_TIMEOUT = 15.0  # seconds (GRIB2 downloads can be slow)
 CACHE_TTL = 3600  # 1 hour in seconds
 
 # Simple in-memory cache
@@ -28,9 +32,9 @@ def _get_cache_key(lat: float, lon: float) -> str:
 
 async def fetch_noaa_gfs(lat: float, lon: float) -> Optional[Dict[str, Any]]:
     """
-    Fetch wave and wind forecast from NOAA GFS/WaveWatch III
+    Fetch wave and wind forecast from NOAA GFS/WaveWatch III via GRIB2
     
-    Uses GRIB2 filtering to extract data for a small region around the coordinates.
+    Uses NOMADS GRIB2 filtering to extract data for a small region around the coordinates.
     Provides global coverage with ~30km resolution.
     
     Args:
@@ -57,8 +61,8 @@ async def fetch_noaa_gfs(lat: float, lon: float) -> Optional[Dict[str, Any]]:
         cycle_hour = (now.hour // 6) * 6
         cycle_time = now.replace(hour=cycle_hour, minute=0, second=0, microsecond=0)
         
-        # If within 2 hours of cycle time, use previous cycle (data may not be ready)
-        if (now - cycle_time).total_seconds() < 7200:
+        # If within 3 hours of cycle time, use previous cycle (data may not be ready)
+        if (now - cycle_time).total_seconds() < 10800:
             cycle_time = cycle_time - timedelta(hours=6)
         
         # Format cycle time
@@ -96,33 +100,72 @@ async def fetch_noaa_gfs(lat: float, lon: float) -> Optional[Dict[str, Any]]:
                     "dir": f"/multi_1.{cycle_str}"
                 }
                 
+                # Download GRIB2 file
                 async with httpx.AsyncClient(timeout=GFS_TIMEOUT) as client:
                     response = await client.get(WAVEWATCH_BASE_URL, params=params)
+                    response.raise_for_status()
                     
-                    if response.status_code == 200:
-                        # Successfully fetched GRIB2 data
-                        # For now, we'll use a simplified approach since parsing GRIB2 
-                        # requires additional libraries (pygrib/cfgrib)
-                        # In production, you'd parse the GRIB2 file here
+                    # Check if we got actual GRIB2 data
+                    content_type = response.headers.get('content-type', '')
+                    if 'text/html' in content_type or len(response.content) < 100:
+                        logger.warning(f"NOAA GFS: Invalid response for hour {forecast_hour}")
+                        continue
+                    
+                    # Save to temporary file
+                    temp_file = tempfile.NamedTemporaryFile(suffix='.grib2', delete=False)
+                    temp_path = temp_file.name
+                    await asyncio.to_thread(temp_file.write, response.content)
+                    temp_file.close()
+                    
+                    try:
+                        # Parse GRIB2 file using cfgrib/xarray
+                        import xarray as xr
                         
-                        # Mock response based on successful fetch
-                        # TODO: Add actual GRIB2 parsing with pygrib or xarray
+                        # Open GRIB2 dataset
+                        ds = await asyncio.to_thread(
+                            xr.open_dataset,
+                            temp_path,
+                            engine='cfgrib',
+                            backend_kwargs={'errors': 'ignore'}
+                        )
+                        
+                        # Extract variables (use mean of bounding box)
+                        wave_height = None
+                        wave_direction = None
+                        wave_period = None
+                        wind_speed = None
+                        
+                        if 'HTSGW_surface' in ds:
+                            wave_height = float(ds['HTSGW_surface'].mean().values)
+                        
+                        if 'WVDIR_surface' in ds:
+                            wave_direction = float(ds['WVDIR_surface'].mean().values)
+                        
+                        if 'WVPER_surface' in ds:
+                            wave_period = float(ds['WVPER_surface'].mean().values)
+                        
+                        if 'WIND_surface' in ds:
+                            wind_speed = float(ds['WIND_surface'].mean().values)
+                        
+                        # Close dataset
+                        ds.close()
+                        
+                        # Clean up temp file
+                        await asyncio.to_thread(os.unlink, temp_path)
+                        
                         duration = (datetime.utcnow() - start_time).total_seconds()
-                        logger.info(f"NOAA GFS API success in {duration:.2f}s (forecast hour: {forecast_hour})")
+                        logger.info(f"NOAA GFS success in {duration:.2f}s (forecast hour: {forecast_hour}, wave_height={wave_height:.2f}m)")
                         
-                        # Return mock data structure for now
-                        # In production, extract actual values from GRIB2
                         result = {
                             "source": "noaa_gfs",
-                            "wave_height_m": None,  # Would be extracted from HTSGW
-                            "wave_period_s": None,  # Would be extracted from WVPER
-                            "wave_direction_deg": None,  # Would be extracted from WVDIR
-                            "wind_speed_ms": None,  # Would be extracted from WIND
-                            "wind_direction_deg": None,
+                            "wave_height_m": round(wave_height, 2) if wave_height is not None else None,
+                            "wave_period_s": round(wave_period, 1) if wave_period is not None else None,
+                            "wave_direction_deg": round(wave_direction, 1) if wave_direction is not None else None,
+                            "wind_speed_ms": round(wind_speed, 2) if wind_speed is not None else None,
+                            "wind_direction_deg": None,  # Not directly available in WaveWatch III
                             "timestamp": (cycle_time + timedelta(hours=int(forecast_hour))).isoformat() + "Z",
                             "forecast_hour": forecast_hour,
-                            "available": False,  # Set to True when GRIB2 parsing is implemented
-                            "note": "GRIB2 parsing not yet implemented - requires pygrib or cfgrib library"
+                            "available": True
                         }
                         
                         # Cache the result
@@ -132,6 +175,15 @@ async def fetch_noaa_gfs(lat: float, lon: float) -> Optional[Dict[str, Any]]:
                         }
                         
                         return result
+                        
+                    except Exception as parse_error:
+                        # Clean up temp file on parse error
+                        try:
+                            await asyncio.to_thread(os.unlink, temp_path)
+                        except:
+                            pass
+                        logger.error(f"NOAA GFS parse error for hour {forecast_hour}: {parse_error}")
+                        continue
                         
             except httpx.TimeoutException:
                 logger.warning(f"NOAA GFS timeout for forecast hour {forecast_hour}")
@@ -157,7 +209,7 @@ async def fetch_noaa_gfs(lat: float, lon: float) -> Optional[Dict[str, Any]]:
 async def health_check_noaa_gfs() -> Dict[str, Any]:
     """
     Health check for NOAA GFS service
-    Tests availability of WaveWatch III data
+    Tests availability of WaveWatch III GRIB2 data
     """
     start_time = datetime.utcnow()
     
@@ -167,11 +219,24 @@ async def health_check_noaa_gfs() -> Dict[str, Any]:
         
         duration = (datetime.utcnow() - start_time).total_seconds() * 1000
         
-        if result:
-            return {"ok": True, "latency_ms": int(duration)}
+        if result and result.get("available"):
+            return {
+                "ok": True,
+                "latency_ms": int(duration),
+                "note": "Live GRIB2 parsed via cfgrib"
+            }
         else:
-            return {"ok": False, "latency_ms": int(duration), "error": "No data available"}
+            return {
+                "ok": False,
+                "latency_ms": int(duration),
+                "note": "NOMADS service unavailable or GRIB2 parsing failed"
+            }
             
     except Exception as e:
         duration = (datetime.utcnow() - start_time).total_seconds() * 1000
-        return {"ok": False, "latency_ms": int(duration), "error": str(e)[:100]}
+        return {
+            "ok": False,
+            "latency_ms": int(duration),
+            "error": str(e)[:100]
+        }
+

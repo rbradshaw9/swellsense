@@ -11,7 +11,7 @@ import asyncio
 import httpx
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Optional
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -63,6 +63,9 @@ class MetNoIngester:
         for entry in timeseries[:48]:  # Next 48 hours
             try:
                 timestamp = datetime.fromisoformat(entry['time'].replace('Z', '+00:00'))
+                # Normalize to UTC with tzinfo=None for PostgreSQL
+                if timestamp.tzinfo:
+                    timestamp = timestamp.astimezone(timezone.utc).replace(tzinfo=None)
                 
                 instant_data = entry.get('data', {}).get('instant', {}).get('details', {})
                 

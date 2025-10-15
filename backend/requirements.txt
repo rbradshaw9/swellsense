@@ -22,6 +22,10 @@ httpx==0.27.2  # Locked for openai compatibility
 # NetCDF and data parsing
 xarray==2024.10.0  # NetCDF parsing for NOAA ERDDAP
 netCDF4==1.7.1.post2  # NetCDF file support
+cfgrib==0.9.10.4  # GRIB2 parsing for NOAA GFS
+eccodes==1.7.1  # ECMWF GRIB decoder
+cdsapi==0.7.0  # Copernicus CDS API client
+aiofiles==23.2.1  # Async file I/O
 
 # AI and Machine Learning
 openai==1.54.0  # OpenAI API for SurfGPT

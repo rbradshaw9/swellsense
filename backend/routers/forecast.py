@@ -38,8 +38,10 @@ from utils.api_clients import (
 
 # Global forecast models
 from utils.fetch_noaa_erddap import fetch_noaa_erddap, health_check_noaa_erddap  # Stable THREDDS endpoint
-# from utils.fetch_noaa_gfs import fetch_noaa_gfs, health_check_noaa_gfs  # Old CGI endpoint (deprecated)
+from utils.fetch_noaa_gfs import fetch_noaa_gfs, health_check_noaa_gfs  # WaveWatch III GRIB2
 from utils.fetch_era5 import fetch_era5, health_check_era5
+from utils.fetch_openmeteo import fetch_openmeteo, health_check_openmeteo  # Free, reliable backup
+from utils.fetch_copernicus import fetch_copernicus, health_check_copernicus  # Ocean currents + temp
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -152,14 +154,17 @@ async def get_global_forecast(
         logger.info(f"Global forecast request for lat={lat}, lon={lon}")
         
         # Fetch all sources in parallel with return_exceptions=True for fault tolerance
-        # Includes regional APIs + global models (NOAA ERDDAP, ERA5)
+        # Regional APIs + Global models + Free backups = 9 total sources
         results = await asyncio.gather(
             fetch_stormglass(lat, lon),
             fetch_openweather(lat, lon),
             fetch_worldtides(lat, lon),
             fetch_metno(lat, lon),
-            fetch_noaa_erddap(lat, lon),  # Replaced GFS CGI with stable ERDDAP
+            fetch_noaa_erddap(lat, lon),
+            fetch_noaa_gfs(lat, lon),
             fetch_era5(lat, lon),
+            fetch_openmeteo(lat, lon),
+            fetch_copernicus(lat, lon),
             return_exceptions=True
         )
         
@@ -169,7 +174,10 @@ async def get_global_forecast(
         worldtides_data = results[2] if not isinstance(results[2], Exception) else None
         metno_data = results[3] if not isinstance(results[3], Exception) else None
         noaa_erddap_data = results[4] if not isinstance(results[4], Exception) else None
-        era5_data = results[5] if not isinstance(results[5], Exception) else None
+        noaa_gfs_data = results[5] if not isinstance(results[5], Exception) else None
+        era5_data = results[6] if not isinstance(results[6], Exception) else None
+        openmeteo_data = results[7] if not isinstance(results[7], Exception) else None
+        copernicus_data = results[8] if not isinstance(results[8], Exception) else None
         
         # Track which sources succeeded
         sources_available = []
@@ -200,10 +208,25 @@ async def get_global_forecast(
         else:
             sources_failed.append("noaa_erddap")
         
+        if noaa_gfs_data and noaa_gfs_data.get("available") is not False:
+            sources_available.append("noaa_gfs")
+        else:
+            sources_failed.append("noaa_gfs")
+        
         if era5_data and era5_data.get("available") is not False:
             sources_available.append("era5")
         else:
             sources_failed.append("era5")
+        
+        if openmeteo_data and openmeteo_data.get("available") is not False:
+            sources_available.append("openmeteo")
+        else:
+            sources_failed.append("openmeteo")
+        
+        if copernicus_data and copernicus_data.get("available") is not False:
+            sources_available.append("copernicus_marine")
+        else:
+            sources_failed.append("copernicus_marine")
         
         # Calculate averages from available data
         wave_heights = []
@@ -216,8 +239,12 @@ async def get_global_forecast(
             wave_heights.append(metno_data["wave_height_m"])
         if noaa_erddap_data and noaa_erddap_data.get("wave_height_m"):
             wave_heights.append(noaa_erddap_data["wave_height_m"])
+        if noaa_gfs_data and noaa_gfs_data.get("wave_height_m"):
+            wave_heights.append(noaa_gfs_data["wave_height_m"])
         if era5_data and era5_data.get("wave_height_m"):
             wave_heights.append(era5_data["wave_height_m"])
+        if openmeteo_data and openmeteo_data.get("wave_height_m"):
+            wave_heights.append(openmeteo_data["wave_height_m"])
             
         if stormglass_data and stormglass_data.get("wind_speed_ms"):
             wind_speeds.append(stormglass_data["wind_speed_ms"])
@@ -225,6 +252,8 @@ async def get_global_forecast(
             wind_speeds.append(openweather_data["wind_speed_ms"])
         if noaa_erddap_data and noaa_erddap_data.get("wind_speed_ms"):
             wind_speeds.append(noaa_erddap_data["wind_speed_ms"])
+        if noaa_gfs_data and noaa_gfs_data.get("wind_speed_ms"):
+            wind_speeds.append(noaa_gfs_data["wind_speed_ms"])
         if era5_data and era5_data.get("wind_speed_ms"):
             wind_speeds.append(era5_data["wind_speed_ms"])
             
@@ -267,7 +296,7 @@ async def get_global_forecast(
         
         # Calculate total response time
         duration = (datetime.utcnow() - request_start).total_seconds()
-        logger.info(f"Global forecast completed in {duration:.2f}s with {len(sources_available)}/6 sources")
+        logger.info(f"Global forecast completed in {duration:.2f}s with {len(sources_available)}/9 sources")
         
         # Build unified response
         response = {
@@ -282,7 +311,10 @@ async def get_global_forecast(
                 "worldtides": worldtides_data,
                 "metno": metno_data,
                 "noaa_erddap": noaa_erddap_data,
-                "era5": era5_data
+                "noaa_gfs": noaa_gfs_data,
+                "era5": era5_data,
+                "openmeteo": openmeteo_data,
+                "copernicus_marine": copernicus_data
             },
             "summary": {
                 "wave_height_m": round(sum(wave_heights) / len(wave_heights), 2) if wave_heights else None,
@@ -355,7 +387,10 @@ async def health_check(db: AsyncSession = Depends(get_db)):
             health_check_worldtides(),
             health_check_metno(),
             health_check_noaa_erddap(),
+            health_check_noaa_gfs(),
             health_check_era5(),
+            health_check_openmeteo(),
+            health_check_copernicus(),
             return_exceptions=True
         )
         
@@ -365,7 +400,10 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         worldtides_health = api_results[2] if not isinstance(api_results[2], Exception) else {"ok": False, "error": str(api_results[2])[:100]}
         metno_health = api_results[3] if not isinstance(api_results[3], Exception) else {"ok": False, "error": str(api_results[3])[:100]}
         noaa_erddap_health = api_results[4] if not isinstance(api_results[4], Exception) else {"ok": False, "error": str(api_results[4])[:100]}
-        era5_health = api_results[5] if not isinstance(api_results[5], Exception) else {"ok": False, "error": str(api_results[5])[:100]}
+        noaa_gfs_health = api_results[5] if not isinstance(api_results[5], Exception) else {"ok": False, "error": str(api_results[5])[:100]}
+        era5_health = api_results[6] if not isinstance(api_results[6], Exception) else {"ok": False, "error": str(api_results[6])[:100]}
+        openmeteo_health = api_results[7] if not isinstance(api_results[7], Exception) else {"ok": False, "error": str(api_results[7])[:100]}
+        copernicus_health = api_results[8] if not isinstance(api_results[8], Exception) else {"ok": False, "error": str(api_results[8])[:100]}
         
         # Determine overall status
         all_services = [
@@ -374,7 +412,10 @@ async def health_check(db: AsyncSession = Depends(get_db)):
             worldtides_health.get("ok", False),
             metno_health.get("ok", False),
             noaa_erddap_health.get("ok", False),
+            noaa_gfs_health.get("ok", False),
             era5_health.get("ok", False),
+            openmeteo_health.get("ok", False),
+            copernicus_health.get("ok", False),
             db_ok
         ]
         
@@ -389,8 +430,14 @@ async def health_check(db: AsyncSession = Depends(get_db)):
             failed_services.append("metno")
         if not noaa_erddap_health.get("ok"):
             failed_services.append("noaa_erddap")
+        if not noaa_gfs_health.get("ok"):
+            failed_services.append("noaa_gfs")
         if not era5_health.get("ok"):
             failed_services.append("era5")
+        if not openmeteo_health.get("ok"):
+            failed_services.append("openmeteo")
+        if not copernicus_health.get("ok"):
+            failed_services.append("copernicus_marine")
         if not db_ok:
             failed_services.append("database")
         
@@ -407,13 +454,16 @@ async def health_check(db: AsyncSession = Depends(get_db)):
                 "worldtides": worldtides_health,
                 "metno": metno_health,
                 "noaa_erddap": noaa_erddap_health,
-                "era5": era5_health
+                "noaa_gfs": noaa_gfs_health,
+                "era5": era5_health,
+                "openmeteo": openmeteo_health,
+                "copernicus_marine": copernicus_health
             },
             "database": {
                 "connected": db_ok
             },
             "failed_services": failed_services if failed_services else None,
-            "version": "v0.4",
+            "version": "v0.6",
             "check_duration_s": round(duration, 2)
         }
         

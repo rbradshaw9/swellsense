@@ -1,25 +1,28 @@
 """
 Copernicus ERA5 (ECMWF) Reanalysis Integration
-Provides high-quality global atmospheric and ocean reanalysis data
+Provides high-quality global atmospheric and ocean reanalysis data via CDS API
+
+Requires CDSAPI_KEY environment variable
 """
-import httpx
+import os
+import asyncio
 import logging
+import tempfile
+import math
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
-import math
 
 logger = logging.getLogger(__name__)
 
 # ERA5 Configuration
-ERA5_TIMEOUT = 10.0  # seconds
+ERA5_TIMEOUT = 60.0  # CDS API can be slow (60 seconds)
 CACHE_TTL = 3600  # 1 hour
 
 # Simple in-memory cache
 _era5_cache: Dict[str, Dict[str, Any]] = {}
 
-# Note: Full ERA5 access requires Copernicus Climate Data Store (CDS) API key
-# For now, we'll use a mock implementation with the structure ready for integration
-CDS_API_KEY = None  # Set this when you have a CDS API account
+# Get CDS API key from environment
+CDSAPI_KEY = os.getenv("CDSAPI_KEY")
 
 
 def _calculate_wind_speed(u: float, v: float) -> float:
@@ -44,7 +47,7 @@ def _get_cache_key(lat: float, lon: float) -> str:
 
 async def fetch_era5(lat: float, lon: float) -> Optional[Dict[str, Any]]:
     """
-    Fetch atmospheric and ocean data from Copernicus ERA5
+    Fetch atmospheric and ocean data from Copernicus ERA5 via CDS API
     
     ERA5 provides hourly reanalysis data at 0.25° resolution (~30km).
     Includes wind components and wave height from ECMWF's global model.
@@ -67,24 +70,125 @@ async def fetch_era5(lat: float, lon: float) -> Optional[Dict[str, Any]]:
             logger.info(f"ERA5 cache hit (age: {cache_age:.0f}s)")
             return cached["data"]
     
+    # Check if API key is configured
+    if not CDSAPI_KEY:
+        logger.warning("ERA5 CDS API key not configured - set CDSAPI_KEY environment variable")
+        result = {
+            "source": "era5",
+            "wave_height_m": None,
+            "wave_period_s": None,
+            "wave_direction_deg": None,
+            "wind_speed_ms": None,
+            "wind_direction_deg": None,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "available": False,
+            "note": "ERA5 requires CDSAPI_KEY environment variable"
+        }
+        return result
+    
     try:
-        # ERA5 requires CDS API which needs authentication
-        # For now, return a mock response with the correct structure
-        # TODO: Implement actual CDS API integration when API key is available
+        # Import cdsapi (only if key is available)
+        try:
+            import cdsapi
+            import xarray as xr
+        except ImportError as e:
+            logger.error(f"ERA5 dependencies not installed: {e}")
+            return None
         
-        if CDS_API_KEY is None:
-            # Mock implementation - simulates what would be returned
+        # Run blocking CDS API call in thread pool
+        def retrieve_era5_data():
+            """Synchronous CDS API retrieval (runs in thread pool)"""
+            c = cdsapi.Client(
+                url="https://cds.climate.copernicus.eu/api/v2",
+                key=CDSAPI_KEY,
+                verify=True
+            )
+            
+            # Create temp file for NetCDF
+            temp_file = tempfile.NamedTemporaryFile(suffix='.nc', delete=False)
+            temp_path = temp_file.name
+            temp_file.close()
+            
+            # Calculate bounding box (small 0.5° box around point)
+            north = min(90, lat + 0.25)
+            south = max(-90, lat - 0.25)
+            west = lon - 0.25
+            east = lon + 0.25
+            
+            # Get current UTC time (ERA5 has ~5 day delay for final data)
+            now = datetime.utcnow()
+            # Use data from 5 days ago to ensure availability
+            target_time = now - timedelta(days=5)
+            
+            # Retrieve ERA5 reanalysis data
+            c.retrieve(
+                'reanalysis-era5-single-levels',
+                {
+                    'product_type': 'reanalysis',
+                    'variable': [
+                        '10m_u_component_of_wind',
+                        '10m_v_component_of_wind',
+                        'significant_height_of_combined_wind_waves_and_swell',
+                        'mean_wave_direction',
+                        'mean_wave_period'
+                    ],
+                    'year': str(target_time.year),
+                    'month': f"{target_time.month:02d}",
+                    'day': f"{target_time.day:02d}",
+                    'time': f"{target_time.hour:02d}:00",
+                    'area': [north, west, south, east],  # N, W, S, E
+                    'format': 'netcdf'
+                },
+                temp_path
+            )
+            
+            return temp_path
+        
+        # Run CDS API call in thread pool (non-blocking)
+        temp_path = await asyncio.wait_for(
+            asyncio.to_thread(retrieve_era5_data),
+            timeout=ERA5_TIMEOUT
+        )
+        
+        # Parse NetCDF file asynchronously
+        try:
+            import xarray as xr
+            
+            # Load dataset
+            ds = await asyncio.to_thread(xr.open_dataset, temp_path)
+            
+            # Extract mean values from the bounding box
+            wave_height = float(ds['swh'].mean().values) if 'swh' in ds else None
+            wave_period = float(ds['mwp'].mean().values) if 'mwp' in ds else None
+            wave_direction = float(ds['mwd'].mean().values) if 'mwd' in ds else None
+            u_wind = float(ds['u10'].mean().values) if 'u10' in ds else None
+            v_wind = float(ds['v10'].mean().values) if 'v10' in ds else None
+            
+            # Calculate wind speed and direction
+            wind_speed = None
+            wind_direction = None
+            if u_wind is not None and v_wind is not None:
+                wind_speed = _calculate_wind_speed(u_wind, v_wind)
+                wind_direction = _calculate_wind_direction(u_wind, v_wind)
+            
+            # Close dataset
+            ds.close()
+            
+            # Clean up temp file
+            await asyncio.to_thread(os.unlink, temp_path)
+            
             duration = (datetime.utcnow() - start_time).total_seconds()
-            logger.info(f"ERA5 API mock response in {duration:.2f}s (CDS API key not configured)")
+            logger.info(f"ERA5 success in {duration:.2f}s (wave_height={wave_height:.2f}m)")
             
             result = {
                 "source": "era5",
-                "wave_height_m": None,
-                "wind_speed_ms": None,
-                "wind_direction_deg": None,
+                "wave_height_m": round(wave_height, 2) if wave_height is not None else None,
+                "wave_period_s": round(wave_period, 1) if wave_period is not None else None,
+                "wave_direction_deg": round(wave_direction, 1) if wave_direction is not None else None,
+                "wind_speed_ms": round(wind_speed, 2) if wind_speed is not None else None,
+                "wind_direction_deg": round(wind_direction, 1) if wind_direction is not None else None,
                 "timestamp": datetime.utcnow().isoformat() + "Z",
-                "available": False,
-                "note": "ERA5 requires Copernicus CDS API key - mock data returned"
+                "available": True
             }
             
             # Cache the result
@@ -94,35 +198,16 @@ async def fetch_era5(lat: float, lon: float) -> Optional[Dict[str, Any]]:
             }
             
             return result
+            
+        except Exception as e:
+            # Clean up temp file on error
+            try:
+                await asyncio.to_thread(os.unlink, temp_path)
+            except:
+                pass
+            raise e
         
-        # Real implementation (when CDS API key is available)
-        # This would use the cdsapi library:
-        # 
-        # import cdsapi
-        # 
-        # c = cdsapi.Client()
-        # 
-        # c.retrieve(
-        #     'reanalysis-era5-single-levels',
-        #     {
-        #         'product_type': 'reanalysis',
-        #         'variable': [
-        #             '10m_u_component_of_wind',
-        #             '10m_v_component_of_wind',
-        #             'significant_height_of_combined_wind_waves_and_swell'
-        #         ],
-        #         'year': datetime.utcnow().year,
-        #         'month': datetime.utcnow().month,
-        #         'day': datetime.utcnow().day,
-        #         'time': f'{datetime.utcnow().hour}:00',
-        #         'area': [lat + 0.25, lon - 0.25, lat - 0.25, lon + 0.25],
-        #         'format': 'netcdf'
-        #     }
-        # )
-        # 
-        # Then parse the NetCDF file with xarray
-        
-    except httpx.TimeoutException:
+    except asyncio.TimeoutError:
         duration = (datetime.utcnow() - start_time).total_seconds()
         logger.warning(f"ERA5 API timeout after {duration:.2f}s")
         return None
@@ -139,51 +224,38 @@ async def health_check_era5() -> Dict[str, Any]:
     """
     start_time = datetime.utcnow()
     
+    # Check if API key is configured
+    if not CDSAPI_KEY:
+        return {
+            "ok": False,
+            "latency_ms": 0,
+            "note": "CDSAPI_KEY not configured"
+        }
+    
     try:
-        # Test with a known location
-        result = await fetch_era5(40.0, -70.0)
+        # Test with a known location (mid-Atlantic)
+        result = await fetch_era5(40.0, -30.0)
         
         duration = (datetime.utcnow() - start_time).total_seconds() * 1000
         
-        if result and result.get("available") is not False:
-            return {"ok": True, "latency_ms": int(duration)}
-        else:
-            # Mock service returns data but marks as unavailable
+        if result and result.get("available"):
             return {
-                "ok": True, 
+                "ok": True,
                 "latency_ms": int(duration),
-                "note": "Mock service - CDS API key not configured"
+                "note": "Live data retrieved via CDS API"
+            }
+        else:
+            return {
+                "ok": False,
+                "latency_ms": int(duration),
+                "note": "CDS API key configured but data unavailable"
             }
             
     except Exception as e:
         duration = (datetime.utcnow() - start_time).total_seconds() * 1000
-        return {"ok": False, "latency_ms": int(duration), "error": str(e)[:100]}
+        return {
+            "ok": False,
+            "latency_ms": int(duration),
+            "error": str(e)[:100]
+        }
 
-
-# Alternative: OpenDAP/THREDDS access to ERA5 (no API key required but slower)
-async def fetch_era5_opendap(lat: float, lon: float) -> Optional[Dict[str, Any]]:
-    """
-    Alternative ERA5 access via OpenDAP/THREDDS
-    Slower but doesn't require CDS API key
-    
-    Note: This is an alternative implementation path
-    """
-    # This would use xarray to access ERA5 via OpenDAP
-    # Example: https://cds.climate.copernicus.eu/thredds/dodsC/...
-    # 
-    # import xarray as xr
-    # 
-    # ds = xr.open_dataset('http://...')
-    # data = ds.sel(latitude=lat, longitude=lon, method='nearest')
-    # 
-    # return {
-    #     "wave_height_m": float(data['swh'].values),
-    #     "wind_speed_ms": calculate_wind_speed(
-    #         float(data['u10'].values),
-    #         float(data['v10'].values)
-    #     ),
-    #     ...
-    # }
-    
-    logger.info("ERA5 OpenDAP access not yet implemented")
-    return None
