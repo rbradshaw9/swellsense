@@ -8,6 +8,28 @@ SwellSense leverages advanced machine learning algorithms and comprehensive ocea
 
 Whether you're a beginner looking for gentle waves or an experienced surfer seeking the perfect barrel, SwellSense helps you make informed decisions about when and where to surf.
 
+## Quick Start
+
+Get SwellSense running locally in 2 minutes:
+
+```bash
+# 1. Start the backend
+cd backend
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn main:app --reload
+
+# 2. Start the frontend (new terminal)
+cd frontend
+npm install
+npm run dev
+```
+
+**Access your app:**
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
+
 ## Features
 
 ### 🎯 Core Features
@@ -119,9 +141,11 @@ Whether you're a beginner looking for gentle waves or an experienced surfer seek
 
 ### Deploy to Vercel
 
-1. **Deploy via GitHub Integration (Recommended)**
+**Important:** The current `vercel.json` configuration deploys only the **frontend** to Vercel. The backend will be deployed separately (e.g., Railway, Render, or AWS Lambda) in future versions.
+
+1. **Deploy Frontend via GitHub Integration (Recommended)**
    - Connect your GitHub repo to Vercel
-   - Vercel will automatically deploy on push to main branch
+   - Vercel will automatically deploy the Next.js frontend
    - Set environment variables in Vercel dashboard
 
 2. **Deploy via Vercel CLI**
@@ -129,6 +153,8 @@ Whether you're a beginner looking for gentle waves or an experienced surfer seek
    npm i -g vercel
    vercel --prod
    ```
+
+**Note:** The `vercel.json` includes backend configuration for future serverless deployment, but currently only the frontend builds successfully.
 
 **Required Environment Variables in Vercel:**
 
@@ -151,7 +177,7 @@ Copy the output and use it as your `SECRET_KEY` in Vercel.
 
 **Project Structure:**
 - Frontend deploys from `/frontend` directory (Next.js)
-- Backend deploys as Vercel serverless functions from `/backend` directory
+- Backend currently runs separately (future: serverless functions)
 
 ### Database Setup
 
@@ -204,22 +230,53 @@ npm test -- --coverage
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and development process.
 
+## Next Steps: v0.2 Milestone
+
+The next major update will focus on **real surf data and AI recommendations**:
+
+🌊 **NOAA Data Ingestion**
+- Connect to NOAA buoy network for live wave data
+- Parse and store wave height, period, and direction
+- Historical data analysis for trend predictions
+
+🤖 **AI Surf Advisor** 
+- Integrate OpenAI for intelligent surf recommendations
+- Natural language explanations: "Why are conditions good?"
+- Personalized advice based on surfer skill level
+
+📊 **Smart Forecasting**
+- Combine buoy data with tide predictions
+- Generate actionable surf quality scores
+- "Best time to surf today" recommendations
+
 ## Roadmap
 
-### Phase 1: Core Functionality (Q4 2025)
+### v0.1: Foundation ✅ (October 2025)
 - [x] Project structure and landing page
 - [x] FastAPI backend with CORS
 - [x] Next.js frontend with Tailwind CSS
-- [ ] NOAA data integration
-- [ ] Basic surf forecasting engine
-- [ ] User authentication and profiles
+- [x] Vercel deployment configuration
+- [x] Environment setup and documentation
 
-### Phase 2: Enhanced Features (Q1 2026)
+### v0.2: Core Data & AI 🚧 (November 2025)
+- [ ] **NOAA Buoy Data Integration**
+  - Real-time wave height, period, direction
+  - Historical data analysis
+  - Buoy station mapping
+- [ ] **AI Surf Advisor**
+  - OpenAI integration for surf recommendations
+  - Natural language surf condition explanations
+  - Personalized advice based on skill level
+- [ ] **Basic Forecasting Engine**
+  - Combine NOAA data with tide information
+  - Generate surf quality scores (1-10)
+  - Simple prediction algorithms
+
+### v0.3: Enhanced Features (Q1 2026)
+- [ ] User authentication and profiles
+- [ ] Favorite surf spots
+- [ ] Push notifications for optimal conditions
 - [ ] Advanced machine learning models
-- [ ] AI chat assistant endpoint
-- [ ] Real-time data processing
-- [ ] Push notifications
-- [ ] Weather integration
 
 ### Phase 3: AI Assistant (Q2 2026)
 - [ ] Natural language processing
