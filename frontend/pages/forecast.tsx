@@ -1,10 +1,12 @@
 import type { NextPage } from 'next'
 import Head from 'next/head'
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/router'
 import dynamic from 'next/dynamic'
-import { WavesIcon, RefreshCw, Calendar, AlertTriangle, MapPin, Navigation } from 'lucide-react'
+import { WavesIcon, RefreshCw, Calendar, AlertTriangle, MapPin, Navigation, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '../utils/api'
+import { useAuth } from '../context/AuthContext'
 import WaveHeightChart from '../components/charts/WaveHeightChart'
 import TideChart from '../components/charts/TideChart'
 import WindCompass from '../components/charts/WindCompass'
@@ -35,6 +37,9 @@ interface SurfCondition {
 }
 
 const Forecast: NextPage = () => {
+  const { user, loading: authLoading } = useAuth()
+  const router = useRouter()
+  
   // Default location: Aguadilla, Puerto Rico (Crash Boat)
   const DEFAULT_COORDS = { lat: 18.4589, lon: -67.1672 }
   const DEFAULT_SPOT_NAME = "Aguadilla - Crash Boat"
@@ -227,6 +232,14 @@ const Forecast: NextPage = () => {
     */
   }
 
+  // Protect route - redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !user) {
+      toast.error('Please sign in to view forecasts')
+      router.push('/login?redirect=/forecast')
+    }
+  }, [user, authLoading, router])
+
   // Fetch forecast data on mount with default Aguadilla coordinates
   useEffect(() => {
     fetchForecast(DEFAULT_COORDS.lat, DEFAULT_COORDS.lon)
@@ -255,6 +268,23 @@ const Forecast: NextPage = () => {
     if (heightFt >= 2 && heightFt < 4) return 'good'
     if (heightFt >= 1 && heightFt < 2) return 'fair'
     return 'poor'
+  }
+
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-cyan-500 via-blue-600 to-blue-700 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-white animate-spin mx-auto mb-4" />
+          <p className="text-white text-lg">Checking authentication...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't render if not authenticated (will redirect)
+  if (!user) {
+    return null
   }
 
   return (

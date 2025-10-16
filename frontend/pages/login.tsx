@@ -13,13 +13,15 @@ const Login: NextPage = () => {
   const [loading, setLoading] = useState(false)
   const { signIn, user } = useAuth()
   const router = useRouter()
+  const { redirect } = router.query
 
   // Redirect if already logged in
   useEffect(() => {
     if (user) {
-      router.push('/forecast')
+      const destination = typeof redirect === 'string' ? redirect : '/forecast'
+      router.push(destination)
     }
-  }, [user, router])
+  }, [user, router, redirect])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -38,7 +40,8 @@ const Login: NextPage = () => {
         toast.error(error.message || 'Login failed')
       } else {
         toast.success('Welcome back! 🌊')
-        router.push('/forecast')
+        const destination = typeof redirect === 'string' ? redirect : '/forecast'
+        router.push(destination)
       }
     } catch (err) {
       toast.error('An unexpected error occurred')

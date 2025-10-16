@@ -1,8 +1,10 @@
 import type { NextPage } from 'next'
 import Head from 'next/head'
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/router'
 import { Sparkles, Send, Loader2, Trash2, Download } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useAuth } from '../context/AuthContext'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -11,11 +13,21 @@ interface Message {
 }
 
 const AI: NextPage = () => {
+  const { user, loading: authLoading } = useAuth()
+  const router = useRouter()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Protect route - redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !user) {
+      toast.error('Please sign in to use AI Chat')
+      router.push('/login?redirect=/ai')
+    }
+  }, [user, authLoading, router])
 
   // Load chat history from localStorage on mount
   useEffect(() => {
@@ -136,6 +148,23 @@ const AI: NextPage = () => {
     "Explain what offshore wind means",
     "What board should I ride for 3 ft glassy waves?"
   ]
+
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-cyan-500 via-blue-600 to-blue-700 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-white animate-spin mx-auto mb-4" />
+          <p className="text-white text-lg">Checking authentication...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't render if not authenticated (will redirect)
+  if (!user) {
+    return null
+  }
 
   return (
     <>
