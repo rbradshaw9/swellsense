@@ -72,42 +72,6 @@ export interface HealthStatus {
   check_duration_s: number
 }
 
-export interface UserPreferences {
-  units: 'imperial' | 'metric'
-  skill_level: 'beginner' | 'intermediate' | 'advanced' | 'expert'
-  board_type: 'shortboard' | 'longboard' | 'funboard' | 'fish' | 'gun'
-  favorite_spots: string[]
-  notifications: boolean
-  ai_persona: 'beginner' | 'experienced' | 'expert' | 'local'
-}
-
-export interface ExtendedUserProfile {
-  id: string
-  email: string
-  role: string
-  username?: string
-  name?: string
-  home_spot?: string
-  avatar_url?: string
-  preferences: UserPreferences
-  created_at?: string
-  authenticated: boolean
-}
-
-export interface UpdateProfileRequest {
-  username?: string
-  name?: string
-  home_spot?: string
-  avatar_url?: string
-  preferences?: Partial<UserPreferences>
-}
-
-export interface UsernameCheckResponse {
-  available: boolean
-  username: string
-  reason?: string
-}
-
 class APIClient {
   private baseURL: string
 
@@ -203,78 +167,6 @@ class APIClient {
     
     if (!response.ok) {
       throw new Error(`Info fetch failed: ${response.statusText}`)
-    }
-    
-    return response.json()
-  }
-
-  /**
-   * Get AI interpretation of forecast data
-   */
-  async interpretForecast(forecastData: ForecastData): Promise<{summary: string; timestamp: string}> {
-    const response = await fetch(`${this.baseURL}/api/ai/forecast/interpret`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(forecastData),
-    })
-    
-    if (!response.ok) {
-      throw new Error(`Forecast interpretation failed: ${response.statusText}`)
-    }
-    
-    return response.json()
-  }
-
-  /**
-   * Get extended user profile with preferences
-   */
-  async getProfile(token: string): Promise<ExtendedUserProfile> {
-    const response = await fetch(`${this.baseURL}/api/user/profile`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    })
-    
-    if (!response.ok) {
-      throw new Error(`Profile fetch failed: ${response.statusText}`)
-    }
-    
-    return response.json()
-  }
-
-  /**
-   * Update user profile and preferences
-   */
-  async updateProfile(token: string, updates: UpdateProfileRequest): Promise<any> {
-    const response = await fetch(`${this.baseURL}/api/user/profile`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(updates),
-    })
-    
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || `Profile update failed: ${response.statusText}`)
-    }
-    
-    return response.json()
-  }
-
-  /**
-   * Check if a username is available
-   */
-  async checkUsernameAvailability(username: string): Promise<UsernameCheckResponse> {
-    const response = await fetch(
-      `${this.baseURL}/api/user/check-username?username=${encodeURIComponent(username)}`
-    )
-    
-    if (!response.ok) {
-      throw new Error(`Username check failed: ${response.statusText}`)
     }
     
     return response.json()
