@@ -10,10 +10,8 @@ You have **TWO options** for the Data Deletion field. Choose the one that works 
 
 ### URL to enter in Facebook App Dashboard:
 ```
-https://your-backend-url.railway.app/api/facebook/data-deletion
+https://api.swellsense.app/api/facebook/data-deletion
 ```
-
-Replace `your-backend-url.railway.app` with your actual Railway deployment URL.
 
 ### What it does:
 - Facebook automatically POSTs to this endpoint when users delete the app
@@ -73,13 +71,14 @@ https://swellsense.app/data-deletion
    FACEBOOK_APP_SECRET=your_facebook_app_secret
    ```
 
-3. **Get your Railway backend URL:**
-   - Go to Railway dashboard
-   - Copy your deployment URL (e.g., `https://swellsense-backend-production.up.railway.app`)
+3. **Your Railway backend URL is:**
+   ```
+   https://api.swellsense.app
+   ```
 
 4. **Enter in Facebook App Dashboard:**
    ```
-   https://your-railway-url.railway.app/api/facebook/data-deletion
+   https://api.swellsense.app/api/facebook/data-deletion
    ```
 
 5. **Test it:**
@@ -104,7 +103,7 @@ https://swellsense.app/data-deletion
 ### Test the Callback URL:
 ```bash
 # Send a test signed request (from Facebook's webhook tester or your own script)
-curl -X POST https://your-railway-url.railway.app/api/facebook/data-deletion \
+curl -X POST https://api.swellsense.app/api/facebook/data-deletion \
   -d "signed_request=test_signature.test_payload"
 ```
 
@@ -129,7 +128,7 @@ Just visit: https://swellsense.app/data-deletion
 
 **For Facebook App Dashboard, use one of these:**
 
-1. **Callback URL** (automated): `https://your-railway-backend.railway.app/api/facebook/data-deletion`
+1. **Callback URL** (automated): `https://api.swellsense.app/api/facebook/data-deletion`
 2. **Instructions URL** (manual): `https://swellsense.app/data-deletion`
 
 **I recommend starting with Option 2** (instructions URL) to get your Facebook app approved quickly, then switching to Option 1 (callback URL) once your backend is fully deployed.

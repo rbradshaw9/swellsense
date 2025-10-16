@@ -16,7 +16,7 @@ https://swellsense.app/terms
 
 **Option 1: Callback URL (Recommended)**
 ```
-https://your-backend-url.railway.app/api/facebook/data-deletion
+https://api.swellsense.app/api/facebook/data-deletion
 ```
 Facebook will automatically POST to this endpoint when users delete the app.
 
@@ -72,7 +72,7 @@ convert -background white -resize 1024x1024 app-icon.svg app-icon-1024.png
 - [ ] Valid OAuth Redirect URIs:
   - `https://swellsense.app/api/auth/callback/facebook`
   - `http://localhost:3000/api/auth/callback/facebook` (for development)
-- [ ] Data Deletion Callback URL: `https://your-backend-url.railway.app/api/facebook/data-deletion`
+- [ ] Data Deletion Callback URL: `https://api.swellsense.app/api/facebook/data-deletion`
   - OR Data Deletion Instructions URL: `https://swellsense.app/data-deletion`
 
 ### Permissions to Request
