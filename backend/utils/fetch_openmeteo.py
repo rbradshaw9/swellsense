@@ -52,12 +52,12 @@ async def fetch_openmeteo(lat: float, lon: float) -> Optional[Dict[str, Any]]:
             return cached["data"]
     
     try:
-        # Build query parameters
+        # Build query parameters (Open-Meteo doesn't support 'current' parameter)
         params = {
             "latitude": lat,
             "longitude": lon,
             "hourly": "wave_height,wave_direction,wave_period,wind_wave_height,wind_wave_direction,wind_wave_period,swell_wave_height,swell_wave_direction,swell_wave_period",
-            "current": "true"
+            "forecast_hours": 1  # Just get current hour
         }
         
         async with httpx.AsyncClient(timeout=OPENMETEO_TIMEOUT) as client:

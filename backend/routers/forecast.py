@@ -228,37 +228,69 @@ async def get_global_forecast(
         else:
             sources_failed.append("copernicus_marine")
         
-        # Calculate averages from available data
+        # Calculate averages from available data with variance tracking
         wave_heights = []
+        wave_heights_sources = []  # Track which sources provided data
         wind_speeds = []
+        wind_speeds_sources = []
         temperatures = []
+        temperature_sources = []
         
         if stormglass_data and stormglass_data.get("wave_height_m"):
             wave_heights.append(stormglass_data["wave_height_m"])
+            wave_heights_sources.append("stormglass")
         if metno_data and metno_data.get("wave_height_m"):
             wave_heights.append(metno_data["wave_height_m"])
+            wave_heights_sources.append("metno")
         if noaa_erddap_data and noaa_erddap_data.get("wave_height_m"):
             wave_heights.append(noaa_erddap_data["wave_height_m"])
+            wave_heights_sources.append("noaa_erddap")
         if noaa_gfs_data and noaa_gfs_data.get("wave_height_m"):
             wave_heights.append(noaa_gfs_data["wave_height_m"])
+            wave_heights_sources.append("noaa_gfs")
         if era5_data and era5_data.get("wave_height_m"):
             wave_heights.append(era5_data["wave_height_m"])
+            wave_heights_sources.append("era5")
         if openmeteo_data and openmeteo_data.get("wave_height_m"):
             wave_heights.append(openmeteo_data["wave_height_m"])
+            wave_heights_sources.append("openmeteo")
             
         if stormglass_data and stormglass_data.get("wind_speed_ms"):
             wind_speeds.append(stormglass_data["wind_speed_ms"])
+            wind_speeds_sources.append("stormglass")
         if openweather_data and openweather_data.get("wind_speed_ms"):
             wind_speeds.append(openweather_data["wind_speed_ms"])
+            wind_speeds_sources.append("openweather")
         if noaa_erddap_data and noaa_erddap_data.get("wind_speed_ms"):
             wind_speeds.append(noaa_erddap_data["wind_speed_ms"])
+            wind_speeds_sources.append("noaa_erddap")
         if noaa_gfs_data and noaa_gfs_data.get("wind_speed_ms"):
             wind_speeds.append(noaa_gfs_data["wind_speed_ms"])
+            wind_speeds_sources.append("noaa_gfs")
         if era5_data and era5_data.get("wind_speed_ms"):
             wind_speeds.append(era5_data["wind_speed_ms"])
+            wind_speeds_sources.append("era5")
             
         if openweather_data and openweather_data.get("temperature_c"):
             temperatures.append(openweather_data["temperature_c"])
+            temperature_sources.append("openweather")
+        
+        # Calculate variance and log warnings if sources disagree
+        def log_variance(values, sources, param_name):
+            if len(values) > 1:
+                mean = sum(values) / len(values)
+                variance = sum((x - mean) ** 2 for x in values) / len(values)
+                std_dev = variance ** 0.5
+                cv_pct = (std_dev / mean * 100) if mean > 0 else 0
+                
+                if cv_pct > 20:
+                    logger.warning(f"{param_name} variance HIGH: CV={cv_pct:.1f}%, mean={mean:.2f}, σ={std_dev:.2f}, sources={sources}")
+                elif cv_pct > 10:
+                    logger.info(f"{param_name} variance moderate: CV={cv_pct:.1f}%, sources={sources}")
+        
+        log_variance(wave_heights, wave_heights_sources, "Wave height")
+        log_variance(wind_speeds, wind_speeds_sources, "Wind speed")
+        log_variance(temperatures, temperature_sources, "Temperature")
         
         # Build human-readable conditions summary
         conditions_text = "Forecast unavailable"

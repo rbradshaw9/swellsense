@@ -18,9 +18,9 @@ CMEMS_BASE_URL = "https://nrt.cmems-du.eu/thredds/ncss/global-analysis-forecast-
 CMEMS_TIMEOUT = 15.0  # seconds
 CACHE_TTL = 3600  # 1 hour
 
-# Get credentials from environment
-CMEMS_USERNAME = os.getenv("CMEMS_USERNAME", None)
-CMEMS_PASSWORD = os.getenv("CMEMS_PASSWORD", None)
+# Get credentials from environment (check both Railway and standard naming)
+CMEMS_USERNAME = os.getenv("CMEMS_USERNAME") or os.getenv("CMEMS_USER")
+CMEMS_PASSWORD = os.getenv("CMEMS_PASSWORD") or os.getenv("CMEMS_PASS")
 
 # Simple in-memory cache
 _cmems_cache: Dict[str, Dict[str, Any]] = {}

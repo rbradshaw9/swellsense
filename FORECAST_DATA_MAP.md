@@ -457,17 +457,37 @@ SwellSense's forecast system is **well-architected** with:
 - ✅ UTC timestamps throughout
 - ✅ 1-hour caching for efficiency
 
-**Opportunities for improvement** (Sprint 3.3):
-- 🔲 Weighted averaging based on source accuracy
-- 🔲 Variance tracking to detect disagreements
-- 🔲 Debug endpoint for transparency
-- 🔲 Manual verification against ground truth (buoys)
-- 🔲 Better handling of ERA5's 5-day lag
+**Sprint 3.3 Progress** (Steps 1-5 Complete):
+- ✅ **Step 1**: Enumerated all data sources → FORECAST_DATA_MAP.md created
+- ✅ **Step 2**: Validated 4/9 sources working (StormGlass, OpenWeather, WorldTides, Open-Meteo)
+- ✅ **Step 3**: Audited aggregation logic (simple averaging, no weighting)
+- ✅ **Step 4**: Created `/api/forecast/debug` endpoint with statistics
+- ✅ **Step 5**: Added variance logging (warns when CV% > 20%)
+- 🔲 **Step 6**: Manual verification against Surfline/buoys (NOT STARTED)
 
-**Next Phase**: Complete Steps 2-6 to build the "Accuracy Foundations" for the AI accuracy engine.
+**Recent Fixes** (Oct 16, 2025):
+- ✅ Fixed Open-Meteo 400 error (removed invalid `current=true` parameter)
+- ✅ Fixed scheduler loop (disabled auto-start in development)
+- ✅ Added comprehensive variance tracking and outlier detection
+- ✅ Source availability: 44.4% (4/9 working)
+
+**Variance Analysis** (Rincon, PR test):
+- Wave Height: 23.4% CV = **moderate** (StormGlass 0.41m vs Open-Meteo 0.66m)
+- Wind Speed: 6.7% CV = **excellent** (StormGlass 3.58 vs OpenWeather 3.13 m/s)
+- Wave Period: 38.3% CV = **poor** (3.01s vs 6.75s - needs investigation!)
+
+**Opportunities for improvement**:
+- 🔲 Weighted averaging based on source accuracy
+- 🔲 Manual verification against ground truth (buoys)
+- 🔲 Fix NOAA ERDDAP (proper THREDDS/OPeNDAP URL)
+- 🔲 Get ERA5 API key (5-day lag but excellent for validation)
+- 🔲 Better handling of wave period discrepancies
+
+**Next Phase**: Complete Step 6 manual verification to establish accuracy baselines.
 
 ---
 
-**Document Version**: 1.0  
-**Last Audit**: Sprint 3.3 Step 1 (January 2025)  
-**Next Review**: After Step 6 completion
+**Document Version**: 1.1  
+**Last Updated**: October 16, 2025 (Steps 4 & 5 complete)  
+**Last Audit**: Sprint 3.3 Step 1-5  
+**Next Review**: After Step 6 completion (manual verification)

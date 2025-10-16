@@ -19,20 +19,11 @@ router = APIRouter(prefix="/api/user", tags=["user"])
 
 # Initialize Supabase client
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+# Check both variable names (Railway uses SUPABASE_SERVICE_ROLE_KEY)
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-    logger.warning("SUPABASE_URL or SUPABASE_SERVICE_KEY not set - profile operations will fail")
-    supabase: Optional[Client] = None
-else:
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-
-# Initialize Supabase client
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
-
-if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-    logger.warning("SUPABASE_URL or SUPABASE_SERVICE_KEY not set - profile operations will fail")
+    logger.warning("SUPABASE_URL or SUPABASE_SERVICE_KEY/SUPABASE_SERVICE_ROLE_KEY not set - profile operations will fail")
     supabase: Optional[Client] = None
 else:
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
