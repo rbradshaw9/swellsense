@@ -49,13 +49,20 @@ app.include_router(user.router)
 # Configure CORS
 origins = [
     "http://localhost:3000",  # Next.js dev server
+    "http://localhost:3001",  # Alternative dev port
     "https://swellsense.app",  # Production domain
-    "https://*.vercel.app",    # Vercel preview deployments
+    "https://www.swellsense.app",  # Production www subdomain
+    "https://swellsense.vercel.app",  # Vercel deployment
+    "https://swellsense-git-main-rbradshaw9.vercel.app",  # Vercel git branch
 ]
+
+# Allow all Vercel preview deployments
+allow_origin_regex = r"https://.*\.vercel\.app"
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -298,24 +298,26 @@ const Forecast: NextPage = () => {
       </Head>
 
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50">
-        <div className="mx-auto max-w-7xl px-6 py-12">
+        <div className="mx-auto max-w-7xl px-3 sm:px-4 md:px-6 py-6 sm:py-8 md:py-12">
           {/* Header */}
-          <div className="mb-12">
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
-              <div className="flex items-center space-x-3">
-                <div className="p-3 bg-gradient-ocean rounded-xl shadow-lg">
-                  <WavesIcon className="w-8 h-8 text-white" />
+          <div className="mb-6 sm:mb-8 md:mb-12">
+            <div className="flex items-start sm:items-center justify-between mb-4 flex-col sm:flex-row gap-3 sm:gap-4">
+              <div className="flex items-center space-x-2 sm:space-x-3">
+                <div className="p-2 sm:p-3 bg-gradient-ocean rounded-xl shadow-lg">
+                  <WavesIcon className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-4xl font-bold text-gray-900">
-                    <span className="flex items-center gap-2">
-                      <MapPin className="w-8 h-8 text-blue-600" />
-                      Forecast for {selectedSpot.name === DEFAULT_SPOT_NAME 
-                        ? 'Aguadilla, Puerto Rico' 
-                        : selectedSpot.name}
+                  <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">
+                    <span className="flex items-center gap-1.5 sm:gap-2">
+                      <MapPin className="w-5 h-5 sm:w-6 sm:w-8 md:h-8 text-blue-600" />
+                      <span className="break-words">
+                        {selectedSpot.name === DEFAULT_SPOT_NAME 
+                          ? 'Aguadilla, PR' 
+                          : selectedSpot.name}
+                      </span>
                     </span>
                   </h1>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <p className="text-xs sm:text-sm text-gray-600 mt-1">
                     {selectedSpot.lat.toFixed(4)}°N, {Math.abs(selectedSpot.lon).toFixed(4)}°W
                   </p>
                 </div>

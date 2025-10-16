@@ -177,36 +177,36 @@ const AI: NextPage = () => {
       </Head>
 
       <div className="min-h-screen bg-gradient-to-br from-cyan-500 via-blue-600 to-blue-700">
-        <div className="mx-auto max-w-5xl px-4 py-8 min-h-screen flex flex-col">
+        <div className="mx-auto max-w-5xl px-3 sm:px-4 py-4 sm:py-8 min-h-screen flex flex-col">
           {/* Header */}
-          <div className="mb-6 text-center">
-            <div className="inline-flex items-center justify-center p-3 bg-white/20 backdrop-blur-sm rounded-xl shadow-lg mb-4">
-              <Sparkles className="w-8 h-8 text-white" />
+          <div className="mb-4 sm:mb-6 text-center">
+            <div className="inline-flex items-center justify-center p-2 sm:p-3 bg-white/20 backdrop-blur-sm rounded-xl shadow-lg mb-3 sm:mb-4">
+              <Sparkles className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
             </div>
-            <h1 className="text-4xl font-bold text-white mb-2">SwellSense AI</h1>
-            <p className="text-blue-100 text-lg">
+            <h1 className="text-3xl sm:text-4xl font-bold text-white mb-1 sm:mb-2">SwellSense AI</h1>
+            <p className="text-blue-100 text-base sm:text-lg">
               Your personal surf forecasting assistant
             </p>
           </div>
 
           {/* Chat Container */}
-          <div className="flex-1 bg-white/10 backdrop-blur-md rounded-2xl shadow-2xl border border-white/20 flex flex-col overflow-hidden">
+          <div className="flex-1 bg-white/10 backdrop-blur-md rounded-xl sm:rounded-2xl shadow-2xl border border-white/20 flex flex-col overflow-hidden">
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-3 sm:space-y-4">
               {messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-center space-y-6 py-12">
-                  <div className="text-white/80 space-y-4">
-                    <p className="text-xl font-medium">👋 Stoked to help you score waves!</p>
-                    <p className="text-lg">Ask me anything about surf conditions, spots, or gear.</p>
+                <div className="flex flex-col items-center justify-center h-full text-center space-y-4 sm:space-y-6 py-8 sm:py-12">
+                  <div className="text-white/80 space-y-3 sm:space-y-4 px-4">
+                    <p className="text-lg sm:text-xl font-medium">👋 Stoked to help you score waves!</p>
+                    <p className="text-base sm:text-lg">Ask me anything about surf conditions, spots, or gear.</p>
                   </div>
                   
                   {/* Preset Questions */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl mt-8">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 max-w-2xl mt-6 sm:mt-8 w-full px-4">
                     {presetQuestions.map((question, index) => (
                       <button
                         key={index}
                         onClick={() => sendMessage(question)}
-                        className="px-4 py-3 bg-white/20 hover:bg-white/30 text-white text-sm rounded-lg transition-colors text-left border border-white/20"
+                        className="px-3 sm:px-4 py-2.5 sm:py-3 bg-white/20 hover:bg-white/30 text-white text-xs sm:text-sm rounded-lg transition-colors text-left border border-white/20"
                       >
                         💬 {question}
                       </button>
@@ -221,16 +221,16 @@ const AI: NextPage = () => {
                       className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       <div
-                        className={`max-w-[80%] rounded-2xl px-5 py-3 ${
+                        className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-4 sm:px-5 py-2.5 sm:py-3 ${
                           message.role === 'user'
                             ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white ml-auto'
                             : 'bg-white/90 backdrop-blur-sm text-gray-800 border border-gray-200'
                         }`}
                       >
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                        <p className="text-xs sm:text-sm leading-relaxed whitespace-pre-wrap">
                           {message.content}
                         </p>
-                        <p className={`text-xs mt-2 ${
+                        <p className={`text-[10px] sm:text-xs mt-1.5 sm:mt-2 ${
                           message.role === 'user' ? 'text-blue-100' : 'text-gray-500'
                         }`}>
                           {new Date(message.timestamp).toLocaleTimeString('en-US', {
