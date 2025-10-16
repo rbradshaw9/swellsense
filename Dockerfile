@@ -19,5 +19,6 @@ RUN pip install --no-cache-dir --upgrade pip && \
 EXPOSE 8080
 
 # Run the application using Railway's PORT environment variable
-# Use $PORT directly (Railway always sets this)
+# Use $PORT directly (Railway always sets this at runtime)
+# The WORKDIR is /app/backend, so Python can import main.app directly
 CMD sh -c "uvicorn main:app --host 0.0.0.0 --port $PORT"
