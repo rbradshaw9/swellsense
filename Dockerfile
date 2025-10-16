@@ -14,8 +14,10 @@ WORKDIR /app/backend
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Expose port
-EXPOSE 8000
+# Expose Railway's dynamic PORT (defaults to 8000 for local dev)
+ARG PORT=8000
+EXPOSE ${PORT}
 
 # Run the application using Railway's PORT environment variable
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Using shell form to enable variable substitution at runtime
+CMD sh -c "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
