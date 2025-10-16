@@ -343,6 +343,226 @@ async def get_global_forecast(
         )
 
 
+@router.get("/forecast/debug")
+async def get_forecast_debug(
+    lat: float,
+    lon: float,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Debug endpoint showing raw data from each source + aggregated result with variance
+    
+    Returns detailed breakdown of:
+    - Raw values from each source (wave height, wind speed, etc.)
+    - Aggregated values (simple mean)
+    - Variance and standard deviation across sources
+    - Data quality metrics (agreement between sources)
+    
+    Use this endpoint to:
+    - Verify individual source accuracy
+    - Identify outlier sources
+    - Debug aggregation logic
+    - Compare source performance by region
+    
+    Args:
+        lat: Latitude (-90 to 90)
+        lon: Longitude (-180 to 180)
+        db: Database session
+    
+    Returns:
+        Detailed debug information with raw + aggregated data
+        
+    Example:
+        /api/forecast/debug?lat=18.33&lon=-67.25  (Rincon, Puerto Rico)
+    """
+    request_start = datetime.utcnow()
+    
+    try:
+        # Validate coordinates
+        if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+            raise HTTPException(status_code=400, detail="Invalid coordinates")
+        
+        logger.info(f"Debug forecast request for lat={lat}, lon={lon}")
+        
+        # Fetch all sources in parallel
+        results = await asyncio.gather(
+            fetch_stormglass(lat, lon),
+            fetch_openweather(lat, lon),
+            fetch_worldtides(lat, lon),
+            fetch_metno(lat, lon),
+            fetch_noaa_erddap(lat, lon),
+            fetch_noaa_gfs(lat, lon),
+            fetch_era5(lat, lon),
+            fetch_openmeteo(lat, lon),
+            fetch_copernicus(lat, lon),
+            return_exceptions=True
+        )
+        
+        # Unpack results with error handling (handle None, Exception, and dict)
+        def normalize_result(result, source_name):
+            if result is None:
+                return {"error": f"{source_name} returned None", "available": False}
+            elif isinstance(result, Exception):
+                return {"error": str(result)[:200], "available": False}
+            elif isinstance(result, dict):
+                return result
+            else:
+                return {"error": f"Unexpected type: {type(result)}", "available": False}
+        
+        source_data = {
+            "stormglass": normalize_result(results[0], "stormglass"),
+            "openweather": normalize_result(results[1], "openweather"),
+            "worldtides": normalize_result(results[2], "worldtides"),
+            "metno": normalize_result(results[3], "metno"),
+            "noaa_erddap": normalize_result(results[4], "noaa_erddap"),
+            "noaa_gfs": normalize_result(results[5], "noaa_gfs"),
+            "era5": normalize_result(results[6], "era5"),
+            "openmeteo": normalize_result(results[7], "openmeteo"),
+            "copernicus_marine": normalize_result(results[8], "copernicus_marine")
+        }
+        
+        # Extract wave heights from all sources
+        wave_heights = []
+        wave_heights_by_source = {}
+        for source_name, data in source_data.items():
+            if data and data.get("available") is not False and data.get("wave_height_m") is not None:
+                wave_heights.append(data["wave_height_m"])
+                wave_heights_by_source[source_name] = data["wave_height_m"]
+        
+        # Extract wind speeds from all sources
+        wind_speeds = []
+        wind_speeds_by_source = {}
+        for source_name, data in source_data.items():
+            if data and data.get("available") is not False and data.get("wind_speed_ms") is not None:
+                wind_speeds.append(data["wind_speed_ms"])
+                wind_speeds_by_source[source_name] = data["wind_speed_ms"]
+        
+        # Extract wave periods
+        wave_periods = []
+        wave_periods_by_source = {}
+        for source_name, data in source_data.items():
+            if data and data.get("available") is not False and data.get("wave_period_s") is not None:
+                wave_periods.append(data["wave_period_s"])
+                wave_periods_by_source[source_name] = data["wave_period_s"]
+        
+        # Calculate statistics for wave height
+        def calculate_stats(values: List[float], name: str) -> Dict[str, Any]:
+            if not values:
+                return {"available": False}
+            
+            mean = sum(values) / len(values)
+            variance = sum((x - mean) ** 2 for x in values) / len(values) if len(values) > 1 else 0
+            std_dev = math.sqrt(variance)
+            coefficient_of_variation = (std_dev / mean * 100) if mean > 0 else 0
+            
+            return {
+                "available": True,
+                "count": len(values),
+                "mean": round(mean, 2),
+                "min": round(min(values), 2),
+                "max": round(max(values), 2),
+                "std_dev": round(std_dev, 2),
+                "variance": round(variance, 3),
+                "coefficient_of_variation_pct": round(coefficient_of_variation, 1),
+                "agreement_level": (
+                    "excellent" if coefficient_of_variation < 10 else
+                    "good" if coefficient_of_variation < 20 else
+                    "moderate" if coefficient_of_variation < 30 else
+                    "poor"
+                )
+            }
+        
+        wave_height_stats = calculate_stats(wave_heights, "wave_height_m")
+        wind_speed_stats = calculate_stats(wind_speeds, "wind_speed_ms")
+        wave_period_stats = calculate_stats(wave_periods, "wave_period_s")
+        
+        # Identify outliers (values more than 1.5 std deviations from mean)
+        def find_outliers(values_by_source: Dict[str, float], mean: float, std_dev: float) -> List[str]:
+            if std_dev == 0:
+                return []
+            outliers = []
+            for source, value in values_by_source.items():
+                z_score = abs(value - mean) / std_dev
+                if z_score > 1.5:
+                    outliers.append(f"{source} ({value:.2f}m, z-score: {z_score:.1f})")
+            return outliers
+        
+        wave_height_outliers = []
+        if wave_height_stats.get("available"):
+            wave_height_outliers = find_outliers(
+                wave_heights_by_source,
+                wave_height_stats["mean"],
+                wave_height_stats["std_dev"]
+            )
+        
+        wind_speed_outliers = []
+        if wind_speed_stats.get("available"):
+            wind_speed_outliers = find_outliers(
+                wind_speeds_by_source,
+                wind_speed_stats["mean"],
+                wind_speed_stats["std_dev"]
+            )
+        
+        # Track sources status
+        sources_available = [k for k, v in source_data.items() if v.get("available") is not False]
+        sources_failed = [k for k, v in source_data.items() if v.get("available") is False]
+        
+        # Calculate response time
+        duration = (datetime.utcnow() - request_start).total_seconds()
+        
+        # Build debug response
+        debug_response = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "location": {
+                "lat": lat,
+                "lon": lon
+            },
+            "raw_data_by_source": source_data,
+            "aggregated_values": {
+                "wave_height_m": wave_height_stats.get("mean") if wave_height_stats.get("available") else None,
+                "wind_speed_ms": wind_speed_stats.get("mean") if wind_speed_stats.get("available") else None,
+                "wave_period_s": wave_period_stats.get("mean") if wave_period_stats.get("available") else None
+            },
+            "statistics": {
+                "wave_height": wave_height_stats,
+                "wind_speed": wind_speed_stats,
+                "wave_period": wave_period_stats
+            },
+            "data_quality": {
+                "wave_height_outliers": wave_height_outliers if wave_height_outliers else None,
+                "wind_speed_outliers": wind_speed_outliers if wind_speed_outliers else None,
+                "overall_agreement": (
+                    "excellent" if all(
+                        stat.get("agreement_level") in ["excellent", "good"]
+                        for stat in [wave_height_stats, wind_speed_stats]
+                        if stat.get("available")
+                    ) else "needs_review"
+                )
+            },
+            "sources_status": {
+                "available": sources_available,
+                "failed": sources_failed if sources_failed else None,
+                "availability_pct": round(len(sources_available) / 9 * 100, 1)
+            },
+            "response_time_s": round(duration, 2),
+            "note": "This debug endpoint shows raw data from each source. Use for troubleshooting accuracy issues."
+        }
+        
+        logger.info(f"Debug forecast completed in {duration:.2f}s - {len(sources_available)}/9 sources available")
+        
+        return debug_response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        duration = (datetime.utcnow() - request_start).total_seconds()
+        logger.error(f"Debug forecast error after {duration:.2f}s: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating debug forecast: {str(e)}"
+        )
+
+
 @router.get("/forecast/health")
 async def health_check(db: AsyncSession = Depends(get_db)):
     """

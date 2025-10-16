@@ -12,8 +12,9 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 # NOAA THREDDS/ERDDAP Configuration
-# Using NOAA's NOMADS operational WaveWatch III data
-THREDDS_BASE_URL = "https://nomads.ncep.noaa.gov/dods/wave/gfswave/global_30m"
+# Using NOAA's NOMADS operational WaveWatch III data via OPeNDAP
+# Note: The DODS endpoint uses OPeNDAP protocol directly (no /ncss or /dodsC prefix)
+THREDDS_BASE_URL = "https://nomads.ncep.noaa.gov/dods/wave/gfswave.global_30m"
 ERDDAP_TIMEOUT = 10.0  # seconds
 CACHE_TTL = 3600  # 1 hour in seconds
 
@@ -79,8 +80,8 @@ async def fetch_noaa_erddap(lat: float, lon: float) -> Optional[Dict[str, Any]]:
             try:
                 import xarray as xr
                 
-                # Open NetCDF from bytes
-                ds = xr.open_dataset(io.BytesIO(response.content))
+                # Open NetCDF from bytes - h5netcdf can read BytesIO
+                ds = xr.open_dataset(io.BytesIO(response.content), engine='h5netcdf')
                 
                 # Extract variables (take mean if multiple grid points)
                 wave_height = None

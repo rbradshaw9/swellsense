@@ -5,9 +5,12 @@ from contextlib import asynccontextmanager
 import uvicorn
 import os
 from dotenv import load_dotenv
+import logging
 
 # Load environment variables from .env file
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 from database import init_db
 from routers import forecast, ai, status, chat, user
@@ -20,13 +23,20 @@ async def lifespan(app: FastAPI):
     # Startup: Initialize database
     await init_db()
     
-    # Start global data ingestion scheduler (runs hourly)
-    global_scheduler.start()
+    # Start global data ingestion scheduler only in production
+    # Disabled in dev to avoid constant API calls and noise in logs
+    enable_scheduler = os.getenv("ENABLE_SCHEDULER", "false").lower() == "true"
+    if enable_scheduler:
+        logger.info("🚀 Starting global ingestion scheduler (production mode)")
+        global_scheduler.start()
+    else:
+        logger.info("⏸️  Global ingestion scheduler disabled (set ENABLE_SCHEDULER=true to enable)")
     
     yield
     
     # Shutdown: Stop background tasks and clean up resources
-    await global_scheduler.stop()
+    if enable_scheduler:
+        await global_scheduler.stop()
 
 
 # Create FastAPI instance
