@@ -1,0 +1,74 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Gradient - Ocean Blue -->
+  <defs>
+    <linearGradient id="oceanGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0EA5E9;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0369A1;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="waveGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#22D3EE;stop-opacity:0.9" />
+      <stop offset="100%" style="stop-color:#06B6D4;stop-opacity:0.7" />
+    </linearGradient>
+    <linearGradient id="aiGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#F59E0B;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FBBF24;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="url(#oceanGradient)" rx="180"/>
+  
+  <!-- Wave Layers (3 waves for depth) -->
+  <!-- Back Wave -->
+  <path d="M 0 650 Q 100 600, 200 650 T 400 650 T 600 650 T 800 650 T 1024 650 L 1024 1024 L 0 1024 Z" 
+        fill="url(#waveGradient)" opacity="0.3"/>
+  
+  <!-- Middle Wave -->
+  <path d="M 0 700 Q 120 650, 240 700 T 480 700 T 720 700 T 1024 700 L 1024 1024 L 0 1024 Z" 
+        fill="url(#waveGradient)" opacity="0.5"/>
+  
+  <!-- Front Wave -->
+  <path d="M 0 750 Q 150 700, 300 750 T 600 750 T 900 750 T 1024 750 L 1024 1024 L 0 1024 Z" 
+        fill="#06B6D4"/>
+  
+  <!-- AI Brain Circuit Symbol (represents AI intelligence) -->
+  <g transform="translate(512, 350)">
+    <!-- Central Circle -->
+    <circle cx="0" cy="0" r="120" fill="none" stroke="url(#aiGradient)" stroke-width="12"/>
+    
+    <!-- Neural Network Nodes -->
+    <circle cx="0" cy="-80" r="20" fill="#FBBF24"/>
+    <circle cx="80" cy="-40" r="20" fill="#FBBF24"/>
+    <circle cx="80" cy="40" r="20" fill="#FBBF24"/>
+    <circle cx="0" cy="80" r="20" fill="#FBBF24"/>
+    <circle cx="-80" cy="40" r="20" fill="#FBBF24"/>
+    <circle cx="-80" cy="-40" r="20" fill="#FBBF24"/>
+    
+    <!-- Connection Lines -->
+    <line x1="0" y1="-80" x2="80" y2="-40" stroke="#F59E0B" stroke-width="4" opacity="0.7"/>
+    <line x1="0" y1="-80" x2="-80" y2="-40" stroke="#F59E0B" stroke-width="4" opacity="0.7"/>
+    <line x1="80" y1="-40" x2="80" y2="40" stroke="#F59E0B" stroke-width="4" opacity="0.7"/>
+    <line x1="80" y1="40" x2="0" y2="80" stroke="#F59E0B" stroke-width="4" opacity="0.7"/>
+    <line x1="0" y1="80" x2="-80" y2="40" stroke="#F59E0B" stroke-width="4" opacity="0.7"/>
+    <line x1="-80" y1="40" x2="-80" y2="-40" stroke="#F59E0B" stroke-width="4" opacity="0.7"/>
+    <line x1="80" y1="-40" x2="-80" y2="40" stroke="#F59E0B" stroke-width="3" opacity="0.5"/>
+    <line x1="80" y1="40" x2="-80" y2="-40" stroke="#F59E0B" stroke-width="3" opacity="0.5"/>
+    
+    <!-- Center Node (AI Core) -->
+    <circle cx="0" cy="0" r="35" fill="#FBBF24"/>
+    <circle cx="0" cy="0" r="25" fill="#F59E0B"/>
+  </g>
+  
+  <!-- Stylized "S" for SwellSense -->
+  <g transform="translate(512, 580)">
+    <path d="M -100 -80 Q -120 -100, -80 -120 L 80 -120 Q 120 -100, 100 -60 L 20 20 Q 10 40, 30 50 L 100 50 
+             M -100 80 Q -120 100, -80 120 L 80 120 Q 120 100, 100 60 L 20 -20 Q 10 -40, 30 -50 L 100 -50" 
+          fill="none" stroke="white" stroke-width="20" stroke-linecap="round"/>
+  </g>
+  
+  <!-- Text -->
+  <text x="512" y="880" font-family="Arial, sans-serif" font-size="80" font-weight="bold" 
+        fill="white" text-anchor="middle">SwellSense</text>
+  <text x="512" y="940" font-family="Arial, sans-serif" font-size="48" 
+        fill="#E0F2FE" text-anchor="middle">AI Surf Forecasts</text>
+</svg>
