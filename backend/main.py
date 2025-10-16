@@ -13,7 +13,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 from database import init_db
-from routers import forecast, ai, status, chat, user
+from routers import forecast, ai, status, chat, user, facebook
 from scheduler import global_scheduler
 
 
@@ -55,6 +55,7 @@ app.include_router(forecast.router)
 app.include_router(ai.router)
 app.include_router(chat.router)
 app.include_router(user.router)
+app.include_router(facebook.router)
 
 # Configure CORS
 origins = [
