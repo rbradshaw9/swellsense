@@ -2,9 +2,9 @@
 Database configuration and models for SwellSense
 Uses async SQLAlchemy with PostgreSQL (Neon)
 """
-from sqlalchemy import Column, Integer, Float, DateTime, String, Index
+from sqlalchemy import Column, Integer, Float, DateTime, String, Index, Boolean, JSON, Text, ForeignKey
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import declarative_base, relationship
 from datetime import datetime
 import os
 from typing import AsyncGenerator
@@ -281,6 +281,209 @@ class DriftingBuoy(Base):
             "wave_height": self.wave_height,
             "wave_period": self.wave_period,
             "wind_speed": self.wind_speed,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class AlertPreference(Base):
+    """User alert preferences for personalized surf notifications"""
+    __tablename__ = "alert_preferences"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(100), unique=True, nullable=False, index=True)  # Supabase user ID
+    
+    # Timing preferences
+    daily_brief_enabled = Column(Boolean, default=True)
+    daily_brief_time = Column(String(5), default="06:00")  # HH:MM format in user's timezone
+    timezone = Column(String(50), default="America/Puerto_Rico")
+    
+    # Alert types
+    breaking_news_enabled = Column(Boolean, default=True)  # Real-time "it's firing!" alerts
+    upcoming_swells_enabled = Column(Boolean, default=True)  # "Big swell arriving Thursday"
+    
+    # Location-based alerts
+    alert_for_favorites = Column(Boolean, default=True)  # Monitor saved favorite spots
+    alert_for_current_location = Column(Boolean, default=False)  # "You're near Blacks Beach and it's good!"
+    alert_radius_miles = Column(Integer, default=25)  # How far from current location to check
+    
+    # Quality thresholds (1-10 scale)
+    minimum_quality_score = Column(Integer, default=7)  # Only alert if spot scores 7+ out of 10
+    only_alert_when_better = Column(Boolean, default=False)  # Only alert if better than last session
+    
+    # Push notification token
+    push_token = Column(String(255), nullable=True)  # Expo push notification token
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "daily_brief_enabled": self.daily_brief_enabled,
+            "daily_brief_time": self.daily_brief_time,
+            "timezone": self.timezone,
+            "breaking_news_enabled": self.breaking_news_enabled,
+            "upcoming_swells_enabled": self.upcoming_swells_enabled,
+            "alert_for_favorites": self.alert_for_favorites,
+            "alert_for_current_location": self.alert_for_current_location,
+            "alert_radius_miles": self.alert_radius_miles,
+            "minimum_quality_score": self.minimum_quality_score,
+            "only_alert_when_better": self.only_alert_when_better,
+            "push_token": self.push_token,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class FavoriteSpot(Base):
+    """User's favorite surf spots for personalized alerts"""
+    __tablename__ = "favorite_spots"
+    __table_args__ = (
+        Index('idx_user_spots', 'user_id', 'spot_name'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(100), nullable=False, index=True)  # Supabase user ID
+    
+    # Spot details
+    spot_name = Column(String(200), nullable=False)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    region = Column(String(100), nullable=True)  # "Puerto Rico", "California", etc.
+    
+    # User notes
+    notes = Column(Text, nullable=True)  # "Best at high tide", "Watch out for rocks"
+    
+    # Priority (for daily brief ranking)
+    priority = Column(Integer, default=1)  # 1 = highest priority, 10 = lowest
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "spot_name": self.spot_name,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
+            "region": self.region,
+            "notes": self.notes,
+            "priority": self.priority,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class AlertHistory(Base):
+    """Track sent alerts to avoid duplicates and measure engagement"""
+    __tablename__ = "alert_history"
+    __table_args__ = (
+        Index('idx_user_alert_time', 'user_id', 'sent_at'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(100), nullable=False, index=True)
+    
+    # Alert details
+    alert_type = Column(String(50), nullable=False)  # "daily_brief", "breaking_news", "upcoming_swell"
+    spot_name = Column(String(200), nullable=False)
+    title = Column(String(200), nullable=False)
+    message = Column(Text, nullable=False)
+    
+    # Conditions at time of alert
+    conditions_snapshot = Column(JSON, nullable=True)  # {"wave_height": 4, "period": 12, "wind": "offshore"}
+    quality_score = Column(Integer, nullable=True)  # 1-10 score
+    
+    # Engagement tracking
+    sent_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    opened_at = Column(DateTime, nullable=True)  # When user tapped notification
+    session_logged = Column(Boolean, default=False)  # Did user surf this spot after alert?
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "alert_type": self.alert_type,
+            "spot_name": self.spot_name,
+            "title": self.title,
+            "message": self.message,
+            "conditions_snapshot": self.conditions_snapshot,
+            "quality_score": self.quality_score,
+            "sent_at": self.sent_at.isoformat() if self.sent_at else None,
+            "opened_at": self.opened_at.isoformat() if self.opened_at else None,
+            "session_logged": self.session_logged,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class SurfSession(Base):
+    """User surf sessions (manual logging or imported from HealthKit/Dawn Patrol)"""
+    __tablename__ = "surf_sessions"
+    __table_args__ = (
+        Index('idx_user_session_time', 'user_id', 'session_date'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(100), nullable=False, index=True)
+    
+    # Session basics
+    spot_name = Column(String(200), nullable=False)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    session_date = Column(DateTime, nullable=False, index=True)
+    duration_minutes = Column(Integer, nullable=True)
+    
+    # Session details
+    waves_caught = Column(Integer, nullable=True)
+    rating = Column(Integer, nullable=True)  # User rating 1-10
+    board_type = Column(String(50), nullable=True)  # "shortboard", "longboard", etc.
+    
+    # Conditions at time of session
+    wave_height_ft = Column(Float, nullable=True)
+    swell_period_sec = Column(Float, nullable=True)
+    wind_speed_mph = Column(Float, nullable=True)
+    wind_direction = Column(String(20), nullable=True)
+    tide = Column(String(20), nullable=True)  # "low", "mid", "high"
+    crowd_level = Column(String(20), nullable=True)  # "empty", "light", "moderate", "packed"
+    
+    # User notes
+    notes = Column(Text, nullable=True)
+    
+    # Photos
+    photo_urls = Column(JSON, nullable=True)  # Array of photo URLs
+    
+    # Import source
+    import_source = Column(String(50), default="manual")  # "manual", "healthkit", "dawn_patrol", "waves"
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "spot_name": self.spot_name,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
+            "session_date": self.session_date.isoformat() if self.session_date else None,
+            "duration_minutes": self.duration_minutes,
+            "waves_caught": self.waves_caught,
+            "rating": self.rating,
+            "board_type": self.board_type,
+            "wave_height_ft": self.wave_height_ft,
+            "swell_period_sec": self.swell_period_sec,
+            "wind_speed_mph": self.wind_speed_mph,
+            "wind_direction": self.wind_direction,
+            "tide": self.tide,
+            "crowd_level": self.crowd_level,
+            "notes": self.notes,
+            "photo_urls": self.photo_urls,
+            "import_source": self.import_source,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
