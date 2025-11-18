@@ -9,8 +9,8 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 
-from ..database import get_db, SurfSession
-from ..auth import get_current_user
+from database import get_db, SurfSession
+from auth import get_current_user
 
 router = APIRouter()
 

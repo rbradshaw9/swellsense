@@ -6,8 +6,8 @@ import { createClient, Session, User } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import 'react-native-url-polyfill/auto';
 
-const SUPABASE_URL = 'https://your-project.supabase.co';  // TODO: Replace with your Supabase URL
-const SUPABASE_ANON_KEY = 'your-anon-key';  // TODO: Replace with your Supabase anon key
+const SUPABASE_URL = 'https://mxxlxoizfqsidyyqxqtg.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im14eGx4b2l6ZnFzaWR5eXF4cXRnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0NzMzNDQsImV4cCI6MjA3OTA0OTM0NH0.k8HAbhAFhnf11woAhChNoOx9S3uehdO8Z2hgZeB4p7Y';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
