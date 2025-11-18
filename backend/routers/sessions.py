@@ -10,7 +10,7 @@ from typing import Optional, List
 from datetime import datetime
 
 from database import get_db, SurfSession
-from auth import get_current_user
+from auth import verify_token, AuthUser
 
 router = APIRouter()
 
@@ -118,7 +118,7 @@ class SessionStats(BaseModel):
 @router.post("/", response_model=SessionResponse, status_code=201)
 async def create_session(
     session: SessionCreate,
-    current_user: dict = Depends(get_current_user),
+    current_user: AuthUser = Depends(verify_token),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -129,7 +129,7 @@ async def create_session(
     """
     # Create session record
     db_session = SurfSession(
-        user_id=current_user["id"],
+        user_id=current_user.id,
         spot_name=session.spot_name,
         latitude=session.latitude,
         longitude=session.longitude,
@@ -162,7 +162,7 @@ async def list_sessions(
     offset: int = Query(0, ge=0, description="Number of sessions to skip"),
     spot_name: Optional[str] = Query(None, description="Filter by spot name"),
     min_rating: Optional[int] = Query(None, ge=1, le=10, description="Minimum rating filter"),
-    current_user: dict = Depends(get_current_user),
+    current_user: AuthUser = Depends(verify_token),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -171,7 +171,7 @@ async def list_sessions(
     Returns sessions sorted by date (most recent first)
     """
     # Build query
-    query = select(SurfSession).where(SurfSession.user_id == current_user["id"])
+    query = select(SurfSession).where(SurfSession.user_id == current_user.id)
     
     # Apply filters
     if spot_name:
@@ -194,7 +194,7 @@ async def list_sessions(
 
 @router.get("/stats", response_model=SessionStats)
 async def get_session_stats(
-    current_user: dict = Depends(get_current_user),
+    current_user: AuthUser = Depends(verify_token),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -203,7 +203,7 @@ async def get_session_stats(
     Provides insights into surfing habits and preferences
     """
     # Get all user sessions
-    query = select(SurfSession).where(SurfSession.user_id == current_user["id"])
+    query = select(SurfSession).where(SurfSession.user_id == current_user.id)
     result = await db.execute(query)
     sessions = result.scalars().all()
     
@@ -273,13 +273,13 @@ async def get_session_stats(
 @router.get("/{session_id}", response_model=SessionResponse)
 async def get_session(
     session_id: int,
-    current_user: dict = Depends(get_current_user),
+    current_user: AuthUser = Depends(verify_token),
     db: AsyncSession = Depends(get_db)
 ):
     """Get a specific session by ID"""
     query = select(SurfSession).where(
         SurfSession.id == session_id,
-        SurfSession.user_id == current_user["id"]
+        SurfSession.user_id == current_user.id
     )
     result = await db.execute(query)
     session = result.scalar_one_or_none()
@@ -294,14 +294,14 @@ async def get_session(
 async def update_session(
     session_id: int,
     session_update: SessionUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: AuthUser = Depends(verify_token),
     db: AsyncSession = Depends(get_db)
 ):
     """Update an existing session"""
     # Get session
     query = select(SurfSession).where(
         SurfSession.id == session_id,
-        SurfSession.user_id == current_user["id"]
+        SurfSession.user_id == current_user.id
     )
     result = await db.execute(query)
     db_session = result.scalar_one_or_none()
@@ -323,14 +323,14 @@ async def update_session(
 @router.delete("/{session_id}", status_code=204)
 async def delete_session(
     session_id: int,
-    current_user: dict = Depends(get_current_user),
+    current_user: AuthUser = Depends(verify_token),
     db: AsyncSession = Depends(get_db)
 ):
     """Delete a session"""
     # Get session
     query = select(SurfSession).where(
         SurfSession.id == session_id,
-        SurfSession.user_id == current_user["id"]
+        SurfSession.user_id == current_user.id
     )
     result = await db.execute(query)
     db_session = result.scalar_one_or_none()
